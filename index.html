@@ -171,7 +171,7 @@
   .chip b { display: block; font-family: var(--mono); font-size: 19px; color: var(--blue); margin-bottom: 4px; }
   .chip span { font-size: 13px; color: var(--muted); }
 
-  /* ── 수치 카드 (슬라이드 14) ── */
+  /* ── 수치 카드 (슬라이드 15) ── */
   .stat-cards { display: flex; gap: 22px; }
   .stat-card {
     flex: 1; text-align: center;
@@ -500,39 +500,31 @@
 
 <!-- 슬라이드 11: SkillOpt 최적화 루프 -->
 <div class="slide"
-     data-notes="[~2분] 작동 방식입니다. AI 팀이시니 이 비유가 제일 빠를 겁니다 — 신경망 학습과 똑같은 구조입니다. forward pass, backward pass, update, validate. ① 에이전트가 스킬 문서를 들고 과제를 수행하고(롤아웃 = forward), ② 결과를 채점하고(= loss), ③ 별도의 옵티마이저 모델이 스킬 문서에 제한된 수정을 제안하고(= gradient update), ④ 검증셋 점수가 실제로 오를 때만 수정을 받아들입니다(= validation). 이걸 에포크 단위로 반복합니다. 학습률이나 검증셋 같은 과적합 방지 장치도 텍스트 공간에 그대로 옮겨놨습니다 — 자세한 건 각주로만 두겠습니다.">
+     data-notes="[~2분 30초] 이제 SkillOpt가 어떻게 작동하는지 봅니다. 이건 논문 원본 Figure 1을 그대로 가져온 겁니다. AI 팀이시니 이 그림이 제일 빠를 거예요 — 왼쪽은 우리에게 익숙한 손실 곡면(loss landscape)인데, 가로 두 축이 모델 파라미터가 아니라 '스킬 공간(Skill Space)'이고 세로축이 검증 오차(Val. Error)입니다. 출발점 S0가 초깃값 스킬이죠. 회색 점선처럼 통제 없이 막 고쳐 쓰면(ad hoc updates) 의미가 크게 점프하면서 불안정하게 헤매다 엉뚱한 곳(suboptimal skill)에 빠집니다. 반면 파란 굵은 화살표가 SkillOpt인데, 한 걸음 한 걸음이 작게 제한된 편집(bounded skill edits)이고, 매 걸음 작은 게이트 아이콘 — 홀드아웃 검증 게이트 — 를 통과해야만 내려갑니다. 빨간 점선은 게이트에서 거부된 곁가지 수정이고요. 그래서 안정적이고 통제된 하강이 됩니다. 오른쪽 표가 핵심입니다 — 신경망 학습의 각 요소가 텍스트 공간에 1:1로 대응돼요. 파라미터 → 스킬 문서, 그래디언트 방향 → 트래젝토리에서 끌어낸 편집 방향, 학습률 → 편집 예산(한 번에 몇 줄까지 고칠지), 검증 체크 → 홀드아웃 선택 게이트, 배치·미니배치·스케줄 같은 안정적 학습 세팅도 그대로 옮겨집니다. 오른쪽 위 작은 그림처럼 모델 f는 눈송이, 즉 얼어 있고 불꽃 표시가 붙은 스킬 S만 학습됩니다. 결과물은 세 가지 좋은 성질을 갖는 스킬 하나 — 과제 성능 향상, 모델·하네스 간 일반화, 저비용 이식. 한 줄로, 가중치 대신 텍스트를 딥러닝과 똑같은 규율로 학습시킨다는 겁니다.">
   <div class="kicker a">04 · 증거 — SkillOpt</div>
-  <h2 class="a">최적화 루프: <span class="hl-p">딥러닝과 같은 구조</span></h2>
+  <h2 class="a">최적화 루프: <span class="hl-p">딥러닝과 똑같은 구조</span></h2>
   <div class="figure a">
-    <svg viewBox="0 0 1100 300" width="1040" xmlns="http://www.w3.org/2000/svg">
-      <!-- 4 단계 박스 -->
-      <rect x="30" y="80" width="230" height="92" rx="13" fill="rgba(79,195,247,0.07)" stroke="#4fc3f7" stroke-width="2"/>
-      <text x="145" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">① 에이전트 실행</text>
-      <text x="145" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Rollout = forward</text>
-      <rect x="300" y="80" width="230" height="92" rx="13" fill="rgba(79,195,247,0.07)" stroke="#4fc3f7" stroke-width="2"/>
-      <text x="415" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">② 결과 채점</text>
-      <text x="415" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Scoring = loss</text>
-      <rect x="570" y="80" width="230" height="92" rx="13" fill="rgba(124,77,255,0.08)" stroke="#7c4dff" stroke-width="2"/>
-      <text x="685" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">③ 스킬 수정 제안</text>
-      <text x="685" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Bounded Edit = update</text>
-      <rect x="840" y="80" width="230" height="92" rx="13" fill="rgba(102,187,106,0.08)" stroke="#66bb6a" stroke-width="2"/>
-      <text x="955" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">④ 검증 통과 시 적용</text>
-      <text x="955" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Validation Gate</text>
-      <!-- 화살표 -->
-      <line x1="260" y1="126" x2="293" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="300,126 288,120 288,132" fill="#b0b0b0"/>
-      <line x1="530" y1="126" x2="563" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="570,126 558,120 558,132" fill="#b0b0b0"/>
-      <line x1="800" y1="126" x2="833" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="840,126 828,120 828,132" fill="#b0b0b0"/>
-      <!-- 루프백 -->
-      <path d="M 955 172 L 955 232 L 145 232 L 145 178" fill="none" stroke="#7c4dff" stroke-width="2.5" stroke-dasharray="7 5"/>
-      <polygon points="145,172 138,186 152,186" fill="#7c4dff"/>
-      <text x="550" y="256" text-anchor="middle" fill="#7c4dff" font-size="15" font-weight="700" class="mono-t">반복 (Epoch)</text>
-    </svg>
+    <img src="assets/skillopt-fig1-overview.png" alt="SkillOpt 개요 — 스킬 공간 손실 곡면에서 검증 게이트로 통제된 하강, 그리고 텍스트-공간 최적화 대응표(파라미터→스킬 문서, 그래디언트→편집 방향, 학습률→편집 예산, 검증→홀드아웃 게이트, 안정 학습→배치·미니배치·스케줄·게이트)"
+         style="max-width:960px; width:100%; max-height:420px; object-fit:contain; border-radius:12px; background:#fff; padding:10px; border:1px solid var(--card-border);">
   </div>
-  <p class="lead a" style="font-size:17px; margin-top:2px;">forward → backward → update → validate. <b style="color:var(--text);">모델 가중치 대신 텍스트를 학습</b></p>
-  <p class="footnote a">안정 장치: Textual Learning Rate (파괴적 수정 방지) · Rejected-Edit Buffer (실패한 수정 기억) · Held-out Validation (과적합 방지)</p>
+  <p class="footnote a" style="text-align:center; margin-top:12px;">신경망 학습 ↔ 스킬 최적화 대응: <b style="color:var(--text);">파라미터→스킬 문서</b> · <b style="color:var(--text);">그래디언트→편집 방향</b> · <b style="color:var(--text);">학습률→편집 예산</b> · <b style="color:var(--text);">검증→홀드아웃 게이트</b> · 모델은 Frozen(❄), 스킬만 학습(🔥)</p>
+  <div class="src">Figure 1, Yang et al., "SkillOpt", arXiv:2605.23904 (2026)</div>
 </div>
 
-<!-- 슬라이드 12: SkillOpt 결과 -->
+<!-- 슬라이드 12: SkillOpt 최적화 파이프라인 (Figure 2) -->
+<div class="slide"
+     data-notes="[~2분 30초] 방금 건 개념도였고, 이건 실제 파이프라인 — 논문 Figure 2입니다. 한 바퀴 같이 따라가 보죠. 왼쪽 위 DATASET, 데이터를 셋으로 나눕니다 — 학습(train) 분할은 롤아웃 증거를 모으고, 검증(validation) 분할은 수정을 수용할지 결정하는 게이트에 쓰고, 테스트(test)는 자물쇠가 걸려 최종 보고 전까지 안 엽니다. 왼쪽 아래 'Fixed Agent'가 얼린 타깃 모델, 그 옆 불꽃 붙은 S_t가 지금 학습 중인 스킬 문서고요. ① 얼린 모델이 현재 스킬을 들고 과제를 풀어 롤아웃 배치를 만듭니다 — 트래젝토리와 점수(그림엔 0.463)가 쌓이죠. forward pass입니다. ② 그 트래젝토리를 미니배치로 쪼개 '옵티마이저 모델'(별도의 강한 프런티어 모델)이 반성합니다. 핵심은 실패와 성공을 분리해서 본다는 것 — 실패 묶음에선 빠진 규칙을 보충하고 성공 묶음에선 잘 되던 행동을 보존해요. 단일 사례가 아니라 묶음을 보기 때문에 '매번 엉뚱한 출처를 뒤진다' 같은 반복되는 절차적 오류가 드러납니다. ③ 각 미니배치가 ADD·DELETE·REPLACE 세 종류의 원자적 편집을 내놓습니다. ④ 배치 단위로 병합하며 중복·모순을 제거하고(Batch-level merge), 편집 예산 L_t만큼만 랭킹해서 잘라냅니다(Rank/clip). 이 편집 예산이 곧 학습률이에요 — 한 스텝에 몇 개까지만 고치게 막아 스킬이 한 번에 무너지지 않게 하고, 코사인 스케줄로 점점 줄입니다. ⑤ 만들어진 후보 스킬 S_t+1을 검증 게이트(노란 다이아몬드)에 넣어, 검증셋 점수가 '엄격히 더 높을 때만' 수용(accept)하고 아니면 거부(reject)합니다 — 동점도 거부예요. 수용된 것 중 최고가 best_skill.md로 빠집니다. 여기가 결정적입니다 — 그럴듯한 진단도 실제 모델 성능을 떨어뜨릴 수 있으니 말로 끝내지 않고 실측으로 검증합니다. 거부된 편집은 버리지 않고 오른쪽 rejected-edit buffer에 저장돼 다음 반성 때 '이건 해봤는데 점수 떨어졌다'는 음의 피드백으로 재활용됩니다. 아래쪽 옅은 박스가 에포크 단위 slow/meta 업데이트 — 한 에포크가 끝나면 이전 에포크 스킬과 현재 스킬을 같은 문제들에 돌려 개선·퇴보·지속 실패·안정 성공으로 분류하고, 장기적으로 유효한 교훈을 보호된 영역에 적어 둡니다. 모멘텀 역할이죠. 정리하면 롤아웃·반성·제한된 편집·검증 게이트·거부 버퍼·slow 업데이트 — 전부 딥러닝 학습 루프를 텍스트 공간에 옮겨 놓은 겁니다.">
+  <div class="kicker a">04 · 증거 — SkillOpt</div>
+  <h2 class="a">최적화 파이프라인: <span class="hl">스킬을 어떻게 학습시키나</span></h2>
+  <div class="figure a">
+    <img src="assets/skillopt-fig2-pipeline.png" alt="SkillOpt 파이프라인 — 롤아웃 배치 → 미니배치 반성(실패/성공 분리) → ADD/DEL/REP 편집 → 배치 병합 → 편집 예산으로 랭킹·클립 → 검증 게이트(수용/거부) → best_skill.md, 거부 편집은 버퍼에 저장, 하단 에포크별 slow/meta 업데이트"
+         style="max-width:1140px; width:100%; max-height:452px; object-fit:contain; border-radius:12px; background:#fff; padding:10px; border:1px solid var(--card-border);">
+  </div>
+  <p class="footnote a" style="text-align:center; margin-top:10px;">① 롤아웃(실행·채점) → ② 미니배치 반성(실패/성공 분리) → ③ <b style="color:var(--text);">ADD·DEL·REP</b> 편집 → ④ 편집 예산으로 랭킹·클립 → ⑤ <b style="color:var(--text);">검증 게이트</b>(점수 오를 때만 수용) → <code style="font-family:var(--mono); color:var(--blue);">best_skill.md</code>. 거부된 편집은 버퍼에 저장(음의 피드백), 에포크마다 slow/meta 업데이트</p>
+  <div class="src">Figure 2, Yang et al., "SkillOpt", arXiv:2605.23904 (2026)</div>
+</div>
+
+<!-- 슬라이드 13: SkillOpt 결과 -->
 <div class="slide"
      data-notes="[~2분] 결과입니다. 막대 보는 법부터 — 연한 칸은 스킬을 적용하기 전 베이스라인 성능이고, 진한 칸은 SkillOpt가 더해준 향상분입니다. 둘을 합친 막대 끝이 최종 성능이고요. GPT-5.5 기준, 세 환경에 공통으로 있는 5개 벤치마크 평균입니다. 여기서 자주 나오는 오해를 먼저 풀겠습니다 — Claude Code의 향상폭(+19.1)이 제일 작죠? 이게 'Claude Code 하네스가 성능이 낮다'는 뜻이 절대 아닙니다. 오히려 반대입니다. Claude Code는 스킬 적용 전 베이스라인이 57.8로 셋 중 가장 높습니다. 출발점이 높으니 올라갈 여지가 작아서 향상폭이 작게 나온 것뿐이고, 최종 성능은 76.9에서 79.6 사이로 세 환경이 대등합니다. 즉 향상폭의 크기는 '실력 차이'가 아니라 '남은 여유 공간'의 차이입니다. 진짜 핵심 메시지는 두 가지입니다. 첫째, 스킬 최적화는 환경을 안 가린다 — 평가한 모든 조합에서 1위 또는 공동 1위였습니다. 직접 채팅은 모델 7종에 과제 6종이라 42개, Codex와 Claude Code 하네스는 GPT-5.5에 과제 5종씩이라 각 5개, 합치면 52개 조합 전부죠. Human이 손으로 쓴 스킬이나 GEPA·TextGrad 같은 기존 자동 최적화 기법도 모두 앞섰습니다. 둘째, 결과물이 모델이 아니라 마크다운 문서 하나라는 것 — 300에서 2,000토큰짜리 best_skill.md가 전부고, 배포할 때 추가 추론 비용은 0입니다.">
   <div class="kicker a">04 · 증거 — SkillOpt</div>
@@ -571,7 +563,7 @@
   </div>
 </div>
 
-<!-- 슬라이드 13: 3계층 통찰 -->
+<!-- 슬라이드 14: 3계층 통찰 -->
 <div class="slide"
      data-notes="[~30초~1분] SkillOpt가 주는 핵심 통찰을 한 장으로 정리하면 이 3계층 구조입니다. 맨 아래, 모델은 얼려둡니다 — 건드리지 않아요. 중간의 코드 하네스는 인프라입니다 — 실행하고 검증하고 상태를 유지하는, 스킬이 실제로 '동작'하게 만드는 기반이죠. 맨 위의 자연어 스킬이 적응 층입니다 — 전략, 휴리스틱, 도메인 지식을 담고, SkillOpt가 최적화하는 게 바로 이 층입니다. 아까 슬라이드 8에서 '자연어는 다른 층에서 일한다'고 했던 게 이 그림입니다. 세 층의 분리 — 이게 오늘 발표에서 하나만 기억하셔야 한다면 가져가실 그림입니다.">
   <div class="kicker a">04 · 증거 — SkillOpt</div>
@@ -600,7 +592,7 @@
 
 <!-- ════════ 섹션 5: 사례 — oh-my-openagent ════════ -->
 
-<!-- 슬라이드 14: oh-my-openagent 소개 -->
+<!-- 슬라이드 15: oh-my-openagent 소개 -->
 <div class="slide"
      data-notes="[~1분 30초] 제가 즐겨 쓰는 오픈소스 oh-my-openagent입니다. OpenCode 위에 하네스 레이어를 통째로 얹은 도구라 'oh-my-opencode'로도 불려요(데모의 그 터미널). 별 개수보다 안에 뭐가 들었는지가 중요합니다. 왼쪽이 전문 에이전트들인데, 그냥 하나의 봇이 아니라 역할이 나뉘어 있습니다 — Prometheus가 계획을 세우고, Sisyphus가 오케스트레이터로 위임하며 완료까지 끌고 가고, Hephaestus가 코드베이스를 파고들어 끝까지 구현하고, Oracle은 아키텍처·디버깅 판단, Librarian은 문서·코드 검색, Explore는 빠른 탐색을 맡습니다. 오른쪽 위는 빌트인 MCP 다섯 개 — Exa로 웹 검색, Context7로 공식 문서, Grep.app으로 깃허브 코드 검색, ast-grep으로 25개 언어 구조 기반 검색, LSP로 정의 이동·참조 찾기·진단 같은 IDE 정밀 도구. 오른쪽 아래는 라이프사이클 훅 54개 이상인데, 파일을 고치거나 커밋할 때마다 자동으로 발동해서 진단·빌드·테스트 같은 코드 품질 게이트를 돌립니다. 별 개수는 6만 2천인데, 핵심은 이 구성요소들이 앞에서 배운 가이드·센서·오케스트레이션을 그대로 구현한다는 점입니다.">
   <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
@@ -636,7 +628,7 @@
   <div class="src">github.com/code-yeongyu/oh-my-openagent · GitHub 62k★ (2026-06, 발표 직전 갱신)</div>
 </div>
 
-<!-- 슬라이드 15: 이론 → 실제 매핑 -->
+<!-- 슬라이드 16: 이론 → 실제 매핑 -->
 <div class="slide"
      data-notes="[~1분 30초] 앞에서 본 개념들이 이름만 붙어서 그대로 들어있습니다. 가이드, 즉 사전 제어는 에이전트 프롬프트와 계층형 AGENTS.md로 구현됩니다 — /init-deep 명령으로 자동 생성까지 해줍니다. 센서, 즉 사후 교정은 LSP 진단·빌드·테스트 훅 54개 이상이고, 에이전트가 파일을 고칠 때마다 자동 발동합니다. 오케스트레이션은 11개 전문 에이전트의 분업이에요 — 계획하는 Prometheus, 실행을 지휘하는 Sisyphus, 아키텍처·디버깅을 보는 Oracle, 문서·코드 검색을 맡는 Librarian, 빠른 탐색의 Explore 등이 역할을 나눠 갖습니다. 상태는 파일시스템·Git·Todo 시스템으로 영속화되고요. 그리고 오른쪽 작은 화면이 Team Mode인데, 에이전트를 최대 8개까지 병렬로 띄워서 tmux로 한눈에 보여줍니다. 한 가지 더 — 4장에서 말한 '자연어 스킬'이 바로 여기 SKILL.md 스킬 시스템으로 실재합니다. 이론과 증거와 제품이 한곳에서 만나는 거죠. 새로운 개념이 하나도 없습니다.">
   <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
@@ -678,7 +670,7 @@
   <p class="lead a" style="margin-top:22px; font-size:16px;">새 개념 없음 — <b style="color:var(--text);">이론·증거·제품이 한곳에서 만난다</b></p>
 </div>
 
-<!-- 슬라이드 16: 서브에이전트 = 컨텍스트 방화벽 -->
+<!-- 슬라이드 17: 서브에이전트 = 컨텍스트 방화벽 -->
 <div class="slide"
      data-notes="[~1분 30초] omo가 왜 에이전트를 11개로 쪼개 두었는지, 그 핵심 이유가 이 그림입니다. HumanLayer가 '컨텍스트 방화벽'이라고 부르는 패턴이에요. 메인 에이전트가 '스키마 파일이 어디 있지?' 같은 탐색을 직접 하면 Grep·Read·Bash 호출과 그 결과가 전부 메인 컨텍스트에 쌓입니다. 수십 번 쌓이면 정작 중요한 맥락이 노이즈에 묻혀 성능이 떨어지죠. 그래서 그 탐색을 서브에이전트한테 통째로 맡깁니다. 서브에이전트는 자기만의 별도 컨텍스트 창에서 그 수십 번의 호출을 다 처리하고, 중간 노이즈는 방화벽이 막아 메인으로 넘기지 않습니다. 돌아오는 건 '파일은 여기 있습니다' 같은 깔끔한 결론 하나뿐이에요. 덕분에 메인 컨텍스트는 끝까지 깨끗하게 유지되고, 더 길고 복잡한 작업을 할 수 있고, 여러 서브에이전트를 병렬로 돌릴 수도 있습니다. 앞 슬라이드에서 본 omo의 Explore·Oracle·Librarian이 정확히 이 방화벽 역할입니다 — 탐색의 노이즈는 가두고 결론만 메인에 전달하는 거죠.">
   <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
@@ -699,7 +691,7 @@
   <div class="src">그림: HumanLayer, "Skill Issue: Harness Engineering for Coding Agents" (humanlayer.dev)</div>
 </div>
 
-<!-- 슬라이드 17: 실제 동작 흐름 + 데모 -->
+<!-- 슬라이드 18: 실제 동작 흐름 + 데모 -->
 <div class="slide"
      data-notes="[~4분 = 도식 1분 + 영상 1분 25초 + 마무리 1분] 도식: 사용자는 'ulw' 한 단어만 입력 → 계획 분해 → Sisyphus 오케스트레이터가 서브에이전트를 부리며 실행 → 코드는 즉시 센서(진단·빌드·테스트) 통과 필수 → 실패 시 자동 수정 루프. 복잡한 작업이면 Prometheus가 먼저 계획서를 만들고, 오늘 데모처럼 작은 버그 수정은 Sisyphus가 바로 받습니다. [🎬 배지 클릭 → 영상 전환, 전체화면 권장] 상황 설정: 어제 동료가 우선순위 가중치를 리팩토링했고 오늘 아침 버그 제보가 들어옴. 영상 내레이션 — (0:00) 입력은 버그 제보 한 줄뿐, 파일 위치도 '테스트 돌려라'도 말 안 함 / (0:05) ulw가 규칙 주입: '증거 없이 믿지 마라, 실행·검증하라' = 가이드 / (0:13) 스스로 git log·show로 어제 커밋 추적 = Stateful / (0:30) 진단: 가중치는 high=3인데 비교자는 오름차순. 커밋 의도를 존중해 비교자를 내림차순으로 고치기로 결정, Todo 3개 등록 / (0:45) 한 줄 수정 diff = Executable / (1:00) 하이라이트: 시키지 않은 테스트 2개 통과 + 빌드 성공 = 센서/Verifiable / (1:15) 요약 보고, $0.22, 컨텍스트 17%. [배지 클릭 → 도식 복귀] 마무리: 1분 25초 안에 가이드·센서·Executable·Verifiable·Stateful 전부 등장. 사람은 제보 한 줄, 나머지는 코드 하네스 위에서 자율적으로.">
   <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
@@ -755,7 +747,7 @@
 
 <!-- ════════ 섹션 6: 마무리 ════════ -->
 
-<!-- 슬라이드 18: 시사점 -->
+<!-- 슬라이드 19: 시사점 -->
 <div class="slide"
      data-notes="[~1분 30초] 정리하겠습니다. 세 가지만 가져가시면 됩니다. 첫째, '더 좋은 모델'만이 답이 아닙니다 — 같은 모델로 하네스만 바꿔서 Terminal Bench 순위가 Top 30에서 Top 5로 올라간 사례가 있습니다. 둘째, 코드가 최적의 하네스 매체입니다 — 실행 가능하고, 검증 가능하고, 상태를 보존하니까요. 셋째, 하네스는 이제 감으로 만드는 게 아니라 SkillOpt처럼 체계적으로 최적화하는 대상이 됐습니다. 마지막으로 이 인용을 남깁니다 — '하네스는 줄어들지 않고, 이동한다.' 모델이 좋아져도 하네스가 사라지는 게 아니라, 새로운 천장에 맞는 새로운 하네스가 필요해집니다. 감사합니다.">
   <div class="kicker a">06 · 마무리</div>
@@ -783,7 +775,7 @@
   </div>
 </div>
 
-<!-- 슬라이드 19: 참고 자료 -->
+<!-- 슬라이드 20: 참고 자료 -->
 <div class="slide"
      data-notes="[Q&A 대기] 참고 자료입니다. 질문 받겠습니다. [예상 질문 대비] ① 프롬프트 엔지니어링과의 차이 → 프롬프트는 하네스의 한 구성요소일 뿐, 하네스는 실행 환경+도구+검증 루프 전체. ② 자연어 스킬이면 코드 아니지 않냐 → 층이 다르다, 코드는 인프라 층, 자연어 스킬은 적응 층. ③ Claude Code 향상폭이 더 작은데? → 향상폭은 '실력차'가 아니라 '여유 공간'. Claude Code는 베이스라인이 57.8로 셋 중 최고라 올라갈 여지가 작을 뿐, 최종은 76.9~79.6으로 세 환경이 대등 (논문 표, GPT-5.5 공통 5개 벤치마크). ④ 모델 좋아지면 하네스 불필요? → 하네스는 줄지 않고 이동한다. ⑤ 당장 적용할 것 → AGENTS.md 60줄 이하 작성, 린터/타입체커를 에이전트 피드백으로 연결, 스킬 분리와 점진적 공개.">
   <div class="kicker a">REFERENCES</div>
@@ -852,7 +844,7 @@ document.addEventListener('click', (e) => {
   else goTo(current + 1);
 });
 
-// 데모 영상 토글 (슬라이드 17: 다이어그램 ↔ 영상)
+// 데모 영상 토글 (슬라이드 18: 다이어그램 ↔ 영상)
 const demoToggle = document.getElementById('demoToggle');
 demoToggle.addEventListener('click', () => {
   const wrap = document.getElementById('demoWrap');
