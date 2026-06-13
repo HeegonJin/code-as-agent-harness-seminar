@@ -1,0 +1,9 @@
+# OS cruft
+.DS_Store
+
+# local per-user Claude settings (machine-specific permission allowlists)
+.claude/settings.local.json
+
+# make-slide skill scaffolding (not part of the deliverable)
+make-slide/
+make-slide.zip

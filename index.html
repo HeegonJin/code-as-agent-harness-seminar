@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>에이전트 하네스로서의 코드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    --bg: #0a0e27;
+    --bg2: #1a1f3a;
+    --blue: #4fc3f7;
+    --purple: #7c4dff;
+    --green: #66bb6a;
+    --red: #ef5350;
+    --text: #e0e0e0;
+    --muted: #b0b0b0;
+    --dim: #7a82a8;
+    --line: rgba(255, 255, 255, 0.12);
+    --card: rgba(255, 255, 255, 0.04);
+    --card-border: rgba(255, 255, 255, 0.09);
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ── 16:9 고정 덱 (PPT처럼 letterbox 스케일링) ── */
+  .deck {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 1280px; height: 720px;
+    transform: translate(-50%, -50%) scale(1);
+    transform-origin: center center;
+    background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    padding: 56px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; z-index: 2; }
+
+  .slide.active .a { opacity: 0; animation: fadeInUp 0.4s ease forwards; }
+  .a:nth-child(1) { animation-delay: 0.05s; }
+  .a:nth-child(2) { animation-delay: 0.1s; }
+  .a:nth-child(3) { animation-delay: 0.15s; }
+  .a:nth-child(4) { animation-delay: 0.2s; }
+  .a:nth-child(5) { animation-delay: 0.25s; }
+  .a:nth-child(6) { animation-delay: 0.3s; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── 공통 타이포 ── */
+  .kicker {
+    font-family: var(--mono);
+    font-size: 13px; letter-spacing: 3px;
+    color: var(--blue);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  h2 { font-size: 40px; font-weight: 700; line-height: 1.25; margin-bottom: 28px; }
+  h2 .hl { color: var(--blue); }
+  h2 .hl-p { color: var(--purple); }
+  h2 .hl-g { color: var(--green); }
+  .lead { font-size: 20px; color: var(--muted); line-height: 1.6; }
+
+  .quote {
+    font-style: italic; color: var(--muted);
+    border-left: 3px solid var(--purple);
+    padding: 6px 0 6px 18px;
+    font-size: 18px; line-height: 1.6;
+  }
+  .quote .who { display: block; font-style: normal; font-size: 14px; color: var(--dim); margin-top: 8px; }
+
+  .src {
+    position: absolute; bottom: 26px; left: 80px;
+    font-family: var(--mono); font-size: 12px; color: var(--dim);
+  }
+
+  .figure { display: flex; justify-content: center; align-items: center; }
+  svg text { font-family: 'Pretendard', sans-serif; }
+  svg .mono-t { font-family: var(--mono); }
+
+  /* ── 카드 / 그리드 ── */
+  .cards { display: flex; gap: 20px; }
+  .card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .card .icon { font-size: 34px; margin-bottom: 12px; }
+  .card h3 { font-size: 20px; margin-bottom: 8px; }
+  .card h3 .en { font-family: var(--mono); font-size: 14px; color: var(--blue); display: block; margin-bottom: 4px; }
+  .card p { font-size: 15px; color: var(--muted); line-height: 1.55; }
+  .card .tag {
+    display: inline-block; margin-top: 12px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--green); border: 1px solid rgba(102, 187, 106, 0.4);
+    border-radius: 20px; padding: 3px 10px;
+  }
+
+  /* ── 매핑 행 (슬라이드 5, 15) ── */
+  .map-rows { display: flex; flex-direction: column; gap: 12px; }
+  .map-row { display: flex; align-items: stretch; gap: 0; }
+  .map-row .left, .map-row .right {
+    flex: 1; display: flex; align-items: center;
+    padding: 13px 20px; border-radius: 10px; font-size: 16.5px;
+  }
+  .map-row .left {
+    background: rgba(239, 83, 80, 0.07);
+    border: 1px solid rgba(239, 83, 80, 0.25);
+    color: var(--muted);
+  }
+  .map-row .right {
+    background: rgba(102, 187, 106, 0.07);
+    border: 1px solid rgba(102, 187, 106, 0.3);
+  }
+  .map-row .arrow {
+    display: flex; align-items: center; padding: 0 16px;
+    color: var(--blue); font-size: 18px;
+  }
+  .map-row .left.neutral {
+    background: rgba(79, 195, 247, 0.06);
+    border-color: rgba(79, 195, 247, 0.3);
+    color: var(--text);
+  }
+  .map-row code { font-family: var(--mono); font-size: 14px; color: var(--blue); }
+
+  /* ── 비교 테이블 (슬라이드 8) ── */
+  table.compare { width: 100%; border-collapse: collapse; font-size: 17px; }
+  table.compare th, table.compare td { padding: 13px 18px; text-align: left; border-bottom: 1px solid var(--line); }
+  table.compare th { font-family: var(--mono); font-size: 13px; letter-spacing: 1px; color: var(--dim); text-transform: uppercase; }
+  table.compare td.no { color: var(--muted); }
+  table.compare td.yes { color: var(--text); }
+  table.compare .x { color: var(--red); margin-right: 8px; }
+  table.compare .o { color: var(--green); margin-right: 8px; }
+  table.compare .tri { color: #ffb74d; margin-right: 8px; }
+
+  /* ── 바 차트 (슬라이드 12) ── */
+  .bars { display: flex; flex-direction: column; gap: 18px; }
+  .bar-row { display: grid; grid-template-columns: 250px 1fr 110px; align-items: center; gap: 16px; }
+  .bar-row .label { font-size: 16px; color: var(--text); text-align: right; }
+  .bar-row .label small { display: block; font-size: 12px; color: var(--dim); }
+  .bar-track { background: rgba(255,255,255,0.05); border-radius: 6px; height: 34px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; }
+  .bar-row .val { font-family: var(--mono); font-size: 19px; font-weight: 700; }
+
+  .stat-chips { display: flex; gap: 14px; margin-top: 30px; }
+  .chip {
+    flex: 1; background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 14px 16px; text-align: center;
+  }
+  .chip b { display: block; font-family: var(--mono); font-size: 19px; color: var(--blue); margin-bottom: 4px; }
+  .chip span { font-size: 13px; color: var(--muted); }
+
+  /* ── 수치 카드 (슬라이드 14) ── */
+  .stat-cards { display: flex; gap: 22px; }
+  .stat-card {
+    flex: 1; text-align: center;
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 30px 18px;
+  }
+  .stat-card b { display: block; font-family: var(--mono); font-size: 40px; color: var(--blue); margin-bottom: 8px; }
+  .stat-card span { font-size: 15px; color: var(--muted); }
+
+  /* ── 참고자료 ── */
+  .refs { display: flex; flex-direction: column; gap: 26px; font-size: 16.5px; }
+  .refs h3 { font-family: var(--mono); font-size: 13px; letter-spacing: 2px; color: var(--blue); text-transform: uppercase; margin-bottom: 10px; }
+  .refs li { list-style: none; color: var(--muted); line-height: 1.9; }
+  .refs .u { font-family: var(--mono); font-size: 13px; color: var(--dim); }
+
+  .footnote { font-size: 13px; color: var(--dim); margin-top: 18px; line-height: 1.5; }
+
+  .demo-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 13px; color: var(--green);
+    border: 1px dashed rgba(102, 187, 106, 0.5); border-radius: 8px;
+    padding: 8px 14px; margin-top: 14px;
+    align-self: flex-start;
+  }
+
+  /* ── UI: 진행 바 / 카운터 ── */
+  .progress {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: var(--blue);
+    z-index: 100; transition: width 0.3s ease;
+  }
+  .counter {
+    position: fixed; bottom: 20px; right: 30px;
+    font-size: 12px; color: rgba(255,255,255,0.5);
+    font-family: var(--mono); z-index: 100;
+  }
+  .hint {
+    position: fixed; bottom: 20px; left: 30px;
+    font-size: 11px; color: rgba(255,255,255,0.3);
+    font-family: var(--mono); z-index: 100;
+    transition: opacity 0.5s ease;
+  }
+  .hint.hidden { opacity: 0; }
+
+  @media print {
+    .progress, .counter, .controls, nav, button,
+    [class*="hint"], [class*="btn"] { display: none !important; }
+    html, body { overflow: visible; }
+    .deck {
+      position: static; transform: none !important;
+      width: 100vw; height: auto; overflow: visible;
+    }
+    .slide {
+      page-break-after: always;
+      position: relative !important;
+      opacity: 1 !important;
+      display: flex !important;
+      width: 100vw; height: 100vh;
+    }
+    .slide.active .a, .a { opacity: 1 !important; animation: none !important; }
+    #demoWrap, video { display: none !important; }
+    #flowFigure { display: flex !important; }
+    @page { size: landscape; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="counter" id="counter"></div>
+<div class="hint">← → 이동 · F 전체화면 · S 발표자 노트</div>
+
+<div class="deck" id="deck">
+
+<!-- ════════ 섹션 1: 오프닝 ════════ -->
+
+<!-- 슬라이드 1: 타이틀 -->
+<div class="slide active" style="align-items:center; text-align:center;"
+     data-notes="[오프닝, 이 슬라이드 ~30초] 안녕하세요. 오늘은 '에이전트 하네스로서의 코드'라는 주제로 이야기하겠습니다. 에이전트를 직접 만들지 않으셔도 괜찮습니다 — 오늘 발표는 'AI 에이전트가 실제로 어떻게 굴러가는가'를 이해하는 자리이고, 그 중심에 의외로 '코드'가 있다는 이야기입니다.">
+  <div class="a" style="font-family:var(--mono); font-size:14px; letter-spacing:4px; color:var(--purple); margin-bottom:24px;">TECH SEMINAR · 2026</div>
+  <h1 class="a" style="font-size:58px; font-weight:800; line-height:1.3;">에이전트 하네스로서의 <span style="color:var(--blue);">코드</span></h1>
+  <p class="a" style="font-family:var(--mono); font-size:17px; color:var(--muted); margin-top:22px;">Toward Executable, Verifiable, and Stateful Agent Systems</p>
+  <div class="a" style="margin-top:60px; width:80px; height:2px; background:linear-gradient(90deg, var(--blue), var(--purple));"></div>
+</div>
+
+<!-- 슬라이드 2: 진화 타임라인 -->
+<div class="slide"
+     data-notes="[~1분 30초] 먼저 이 주제가 어디서 왔는지 위치를 잡겠습니다. 2023년엔 다들 '프롬프트를 잘 쓰는 법'을 얘기했습니다. 2024년엔 프롬프트 하나가 아니라 모델에게 주는 맥락 전체를 관리하는 '컨텍스트 엔지니어링'으로 넘어왔죠. 그리고 지금은 프롬프트와 컨텍스트를 포함해, 모델을 둘러싼 시스템 전체를 설계하는 '하네스 엔지니어링' 단계입니다. 오늘 발표는 이 세 번째 단계 이야기입니다.">
+  <div class="kicker a">01 · 오프닝</div>
+  <h2 class="a">프롬프트에서 <span class="hl">하네스</span>로</h2>
+  <div class="figure a">
+    <svg viewBox="0 0 1100 280" width="1060" xmlns="http://www.w3.org/2000/svg">
+      <line x1="80" y1="120" x2="1020" y2="120" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+      <polygon points="1020,120 1006,113 1006,127" fill="rgba(255,255,255,0.18)"/>
+      <!-- node 1 -->
+      <text x="190" y="52" text-anchor="middle" fill="#7a82a8" font-size="15" class="mono-t">2023</text>
+      <circle cx="190" cy="120" r="11" fill="none" stroke="#7a82a8" stroke-width="2.5"/>
+      <text x="190" y="172" text-anchor="middle" fill="#b0b0b0" font-size="20" font-weight="700">Prompt Engineering</text>
+      <text x="190" y="202" text-anchor="middle" fill="#7a82a8" font-size="15">"프롬프트를 잘 쓰자"</text>
+      <!-- node 2 -->
+      <text x="550" y="52" text-anchor="middle" fill="#7a82a8" font-size="15" class="mono-t">2024</text>
+      <circle cx="550" cy="120" r="11" fill="none" stroke="#b0b0b0" stroke-width="2.5"/>
+      <text x="550" y="172" text-anchor="middle" fill="#d0d0d0" font-size="20" font-weight="700">Context Engineering</text>
+      <text x="550" y="202" text-anchor="middle" fill="#7a82a8" font-size="15">"맥락을 관리하자"</text>
+      <!-- node 3 (강조) -->
+      <text x="910" y="52" text-anchor="middle" fill="#4fc3f7" font-size="15" class="mono-t">2025–26</text>
+      <circle cx="910" cy="120" r="15" fill="#4fc3f7" opacity="0.18"/>
+      <circle cx="910" cy="120" r="11" fill="#0a0e27" stroke="#4fc3f7" stroke-width="3"/>
+      <text x="910" y="172" text-anchor="middle" fill="#4fc3f7" font-size="22" font-weight="800">Harness Engineering</text>
+      <text x="910" y="202" text-anchor="middle" fill="#b0b0b0" font-size="15">"시스템 전체를 설계하자"</text>
+      <text x="910" y="240" text-anchor="middle" fill="#7c4dff" font-size="14" class="mono-t">← 오늘의 주제</text>
+    </svg>
+  </div>
+</div>
+
+<!-- 슬라이드 3: 문제 제기 -->
+<div class="slide"
+     data-notes="[~1분 30초] 왜 하네스가 필요할까요? LLM은 본질적으로 텍스트가 들어가면 텍스트가 나오는 함수입니다. 대화가 끝나면 아무것도 기억하지 못하고, 스스로 코드를 실행할 수도, 최신 정보를 찾아볼 수도, 자기 출력이 맞는지 검증할 수도 없습니다. 그래서 이 인용이 핵심입니다 — '괜찮은 모델 + 훌륭한 하네스'가 '훌륭한 모델 + 나쁜 하네스'를 이깁니다. 모델 성능 경쟁만 보던 시각에서 벗어나자는 게 오늘의 출발점입니다.">
+  <div class="kicker a">01 · 오프닝</div>
+  <h2 class="a">모델만으로는 <span class="hl-p">에이전트가 되지 않는다</span></h2>
+  <div class="figure a">
+    <svg viewBox="0 0 1100 300" width="1010" xmlns="http://www.w3.org/2000/svg">
+      <!-- 중심 모델 -->
+      <circle cx="550" cy="150" r="78" fill="rgba(124,77,255,0.12)" stroke="#7c4dff" stroke-width="2.5"/>
+      <text x="550" y="143" text-anchor="middle" fill="#e0e0e0" font-size="24" font-weight="800">LLM</text>
+      <text x="550" y="172" text-anchor="middle" fill="#b0b0b0" font-size="14">텍스트 in → 텍스트 out</text>
+      <!-- 빠진 기능들 -->
+      <g>
+        <line x1="475" y1="100" x2="295" y2="62" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <rect x="105" y="35" width="190" height="54" rx="10" fill="rgba(239,83,80,0.07)" stroke="rgba(239,83,80,0.4)" stroke-width="1.5"/>
+        <text x="200" y="68" text-anchor="middle" fill="#e0e0e0" font-size="16">❌ 상태 유지 (기억)</text>
+      </g>
+      <g>
+        <line x1="475" y1="200" x2="295" y2="238" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <rect x="105" y="211" width="190" height="54" rx="10" fill="rgba(239,83,80,0.07)" stroke="rgba(239,83,80,0.4)" stroke-width="1.5"/>
+        <text x="200" y="244" text-anchor="middle" fill="#e0e0e0" font-size="16">❌ 도구·코드 실행</text>
+      </g>
+      <g>
+        <line x1="625" y1="100" x2="805" y2="62" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <rect x="805" y="35" width="190" height="54" rx="10" fill="rgba(239,83,80,0.07)" stroke="rgba(239,83,80,0.4)" stroke-width="1.5"/>
+        <text x="900" y="68" text-anchor="middle" fill="#e0e0e0" font-size="16">❌ 실시간 정보 접근</text>
+      </g>
+      <g>
+        <line x1="625" y1="200" x2="805" y2="238" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <rect x="805" y="211" width="190" height="54" rx="10" fill="rgba(239,83,80,0.07)" stroke="rgba(239,83,80,0.4)" stroke-width="1.5"/>
+        <text x="900" y="244" text-anchor="middle" fill="#e0e0e0" font-size="16">❌ 출력 자기 검증</text>
+      </g>
+    </svg>
+  </div>
+  <div class="quote a" style="margin-top:10px;">
+    "A decent model with a great harness beats a great model with a bad harness."
+    <span class="who">— Addy Osmani, Agent Harness Engineering</span>
+  </div>
+</div>
+
+<!-- ════════ 섹션 2: 배경 — 하네스란? ════════ -->
+
+<!-- 슬라이드 4: Agent = Model + Harness -->
+<div class="slide"
+     data-notes="[~2분] 그래서 하네스란 무엇인가. 이 그림이 직관적입니다 — 모델은 보드 위의 칩 하나일 뿐이고, 그 주위를 감싼 게 전부 하네스입니다. 가장 간결한 정의는 LangChain의 것이죠, '모델이 아닌 모든 것이 하네스다'. 위쪽 컨텍스트 주입(프롬프트·메모리·스킬), 왼쪽 제어(오케스트레이션·루프), 오른쪽 행동(Bash·도구·MCP), 아래쪽 관찰·검증(테스트·로그)과 영속(파일·git) — 모델을 감싸는 이 전체 레이어가 하네스입니다. Claude Code, Codex CLI, Cursor 같은 제품들의 차이가 사실상 이 하네스의 차이입니다.">
+  <div class="kicker a">02 · 배경 — 하네스란?</div>
+  <h2 class="a"><span style="font-family:var(--mono);">Agent = Model + <span class="hl">Harness</span></span></h2>
+  <p class="lead a" style="margin-bottom:14px;">"모델이 아닌 모든 것이 하네스다" — LangChain</p>
+  <div class="figure a">
+    <img src="assets/harness-anatomy.jpeg" alt="에이전트 하네스 해부도 — 모델은 보드 위 칩 하나, 컨텍스트 주입·제어·행동·관찰/검증·영속이 그 주위를 감싼다"
+         style="max-width:840px; width:100%; max-height:392px; object-fit:contain; border-radius:12px; border:1px solid var(--card-border);">
+  </div>
+  <p class="footnote a" style="text-align:center; margin-top:12px;">모델은 보드 위 <b style="color:var(--text);">칩 하나</b> — 컨텍스트 주입(프롬프트·메모리·스킬)·제어(오케스트레이션·루프)·행동(Bash·도구·MCP)·관찰/검증·영속이 하네스</p>
+  <div class="src">그림: Addy Osmani, "Agent Harness Engineering" (2026) · 정의: LangChain</div>
+</div>
+
+<!-- 슬라이드 5: 모델 한계 → 하네스 해결 -->
+<div class="slide"
+     data-notes="[~2분] 하네스가 왜 그 모양인지는, 모델이 못 하는 것에서 역으로 추론하면 명확합니다. 이 그림이 좋은 비유인데 — 왼쪽 절벽이 '모델 혼자 할 수 있는 것'이고, 오른쪽으로 건너가려면 다리가 필요합니다. 컨텍스트 윈도우보다 큰 작업, 코드 실행, 환경을 안 망가뜨리는 안전한 기본값, 학습 시점에 없던 새 지식, 긴 컨텍스트 유지, 여러 세션에 걸친 장기 작업 — 이 각각을 건너게 해주는 다리 하나하나가 하네스 기능입니다. 파일시스템과 git, bash 실행, 샌드박스, 메모리·웹검색·MCP, 컴팩션과 스킬, 계획과 검증. 결국 하나하나가 모델이 못 하는 것을 메워주는 장치인 셈입니다.">
+  <div class="kicker a">02 · 배경 — 하네스란?</div>
+  <h2 class="a">하네스는 모델의 <span class="hl-p">빈칸</span>을 채운다</h2>
+  <div class="figure a">
+    <img src="assets/harness-bridges.jpeg" alt="하네스 = 모델이 혼자 못 하는 것마다 놓는 다리 — 파일시스템/git, 코드 실행, 샌드박스, 메모리·웹검색·MCP, 컴팩션·스킬, 계획·검증"
+         style="max-width:900px; width:100%; max-height:432px; object-fit:contain; border-radius:12px; border:1px solid var(--card-border);">
+  </div>
+  <p class="footnote a" style="text-align:center; margin-top:10px;">모델 혼자 못 하는 것마다 하네스가 <b style="color:var(--text);">다리</b>를 놓는다 — 파일·git · 코드 실행 · 샌드박스 · 메모리·웹검색·MCP · 컴팩션·스킬 · 계획·검증</p>
+  <div class="src">그림: Addy Osmani, "Agent Harness Engineering" (2026)</div>
+</div>
+
+<!-- 슬라이드 6: 가이드 vs 센서 -->
+<div class="slide"
+     data-notes="[~2분] 하네스의 작동 원리를 한 단계 더 들어가면, Birgitta Böckeler가 제시한 '가이드와 센서' 구분이 유용합니다. 가이드는 사전 제어입니다 — AGENTS.md, 프롬프트, 규칙처럼 에이전트가 행동하기 전에 방향을 잡아주는 것. 센서는 사후 교정입니다 — 린터, 타입체커, 테스트처럼 행동의 결과를 감지해서 피드백을 돌려주는 것. 그리고 이 피드백이 자기 교정 루프를 만듭니다. 여기서 주목할 점: 센서는 전부 코드입니다. 이게 다음 섹션의 복선입니다. HumanLayer의 표현대로 '성공은 조용하고, 실패는 시끄럽게' 만드는 것이 좋은 하네스 설계입니다.">
+  <div class="kicker a">02 · 배경 — 하네스란?</div>
+  <h2 class="a"><span class="hl">가이드</span>는 예방하고, <span class="hl-g">센서</span>는 교정한다</h2>
+  <div class="figure a">
+    <svg viewBox="0 0 1100 320" width="1040" xmlns="http://www.w3.org/2000/svg">
+      <!-- 가이드 -->
+      <rect x="40" y="70" width="270" height="150" rx="14" fill="rgba(79,195,247,0.07)" stroke="#4fc3f7" stroke-width="2"/>
+      <text x="175" y="105" text-anchor="middle" fill="#4fc3f7" font-size="19" font-weight="800">가이드 Guides</text>
+      <text x="175" y="131" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">FEEDFORWARD · 예방</text>
+      <text x="175" y="166" text-anchor="middle" fill="#b0b0b0" font-size="15">AGENTS.md · 프롬프트</text>
+      <text x="175" y="192" text-anchor="middle" fill="#b0b0b0" font-size="15">규칙 · 컨벤션</text>
+      <!-- 에이전트 행동 -->
+      <rect x="415" y="70" width="270" height="150" rx="14" fill="rgba(124,77,255,0.1)" stroke="#7c4dff" stroke-width="2"/>
+      <text x="550" y="105" text-anchor="middle" fill="#e0e0e0" font-size="19" font-weight="800">에이전트 행동</text>
+      <text x="550" y="131" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">실행 · 생성</text>
+      <text x="550" y="166" text-anchor="middle" fill="#b0b0b0" font-size="15">코드 작성</text>
+      <text x="550" y="192" text-anchor="middle" fill="#b0b0b0" font-size="15">파일 수정</text>
+      <!-- 센서 -->
+      <rect x="790" y="70" width="270" height="150" rx="14" fill="rgba(102,187,106,0.07)" stroke="#66bb6a" stroke-width="2"/>
+      <text x="925" y="105" text-anchor="middle" fill="#66bb6a" font-size="19" font-weight="800">센서 Sensors</text>
+      <text x="925" y="131" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">FEEDBACK · 감지+수정</text>
+      <text x="925" y="166" text-anchor="middle" fill="#b0b0b0" font-size="15">린터 · 타입체커</text>
+      <text x="925" y="192" text-anchor="middle" fill="#b0b0b0" font-size="15">테스트 · 빌드</text>
+      <!-- 화살표 -->
+      <line x1="310" y1="145" x2="403" y2="145" stroke="#4fc3f7" stroke-width="2.5"/>
+      <polygon points="415,145 401,138 401,152" fill="#4fc3f7"/>
+      <line x1="685" y1="145" x2="778" y2="145" stroke="#66bb6a" stroke-width="2.5"/>
+      <polygon points="790,145 776,138 776,152" fill="#66bb6a"/>
+      <!-- 피드백 루프 -->
+      <path d="M 925 220 L 925 272 L 550 272 L 550 226" fill="none" stroke="#66bb6a" stroke-width="2.5" stroke-dasharray="7 5"/>
+      <polygon points="550,220 543,234 557,234" fill="#66bb6a"/>
+      <text x="737" y="294" text-anchor="middle" fill="#66bb6a" font-size="15" font-weight="700">자기 교정 루프</text>
+    </svg>
+  </div>
+  <div class="quote a" style="margin-top:4px; font-size:16px;">
+    "Success is silent, failures are verbose." <span class="who" style="display:inline; margin-left:8px;">— HumanLayer</span>
+  </div>
+  <div class="src">Böckeler / martinfowler.com, "Harness engineering" (2026)</div>
+</div>
+
+<!-- ════════ 섹션 3: Thesis — 왜 코드인가? ════════ -->
+
+<!-- 슬라이드 7: 코드의 3가지 구조적 우위 -->
+<div class="slide"
+     data-notes="[~2분] 이제 오늘의 핵심 주장입니다. 하네스를 만드는 매체로서 코드가 자연어보다 구조적으로 우월한 이유 세 가지 — 42인 공저 서베이 논문 'Code as Agent Harness'의 핵심 논증이고, 논문 원문 표현 그대로 executable, verifiable, stateful입니다. 첫째, 실행 가능 — 모델의 출력이 그냥 글이 아니라 실제 동작이 됩니다. 둘째, 검증 가능 — 통과냐 실패냐를 기계가 판정할 수 있습니다. 사람이 읽고 '음 괜찮네' 하는 것과 차원이 다릅니다. 셋째, 상태 보존 — 파일과 프로그램은 작업 진행 상황의 영속적인 기록이 됩니다.">
+  <div class="kicker a">03 · THESIS — 왜 코드인가?</div>
+  <h2 class="a">코드의 <span class="hl">3가지 구조적 우위</span></h2>
+  <div class="cards" style="margin-top:10px;">
+    <div class="card a">
+      <div class="icon">▶️</div>
+      <h3><span class="en">EXECUTABLE</span>실행 가능</h3>
+      <p>모델 출력이 실제 동작이 된다</p>
+      <p style="margin-top:10px; color:var(--dim); font-size:14px;">의도가 실제 행동으로 검증됨</p>
+    </div>
+    <div class="card a" style="border-color:rgba(79,195,247,0.35);">
+      <div class="icon">✅</div>
+      <h3><span class="en">VERIFIABLE</span>검증 가능</h3>
+      <p>성공/실패를 기계적으로 판정 가능</p>
+      <p style="margin-top:10px; color:var(--dim); font-size:14px;">실패 진단 + 피드백 가능</p>
+    </div>
+    <div class="card a">
+      <div class="icon">💾</div>
+      <h3><span class="en">STATEFUL</span>상태 보존</h3>
+      <p>프로그램 = 작업 진행의 영속적 표현</p>
+      <p style="margin-top:10px; color:var(--dim); font-size:14px;">단계 간 정보 유지</p>
+    </div>
+  </div>
+  <div class="src">Ning et al., "Code as Agent Harness", arXiv:2605.18747 (2026)</div>
+</div>
+
+<!-- 슬라이드 8: 코드와 자연어 — 역할 분담 -->
+<div class="slide"
+     data-notes="[~1분 30초] 자연어와 직접 비교해 보겠습니다. 단, 오해 방지 — 이건 '자연어는 나쁘다'가 아닙니다. 하네스의 인프라 층, 그러니까 실행하고 검증하고 상태를 유지하는 역할 기준의 비교입니다. 그 기준에서 자연어는 해석이 필요하고, 검증이 주관적이고, 매번 다시 설명해야 하고, 비결정적입니다. 코드는 전부 반대죠. [전환] 그럼 자연어는 쓸모없나? 아닙니다 — 자연어는 다른 층에서 일합니다. 전략과 휴리스틱을 담는 적응 층이죠. 그 증거가 바로 다음 섹션의 SkillOpt입니다.">
+  <div class="kicker a">03 · THESIS — 왜 코드인가?</div>
+  <h2 class="a">대체가 아닌 <span class="hl-g">역할 분담</span> — 인프라 층은 코드</h2>
+  <table class="compare a">
+    <tr><th>기준 (인프라 층 역할)</th><th>자연어 프롬프트</th><th>코드</th></tr>
+    <tr><td>실행 가능?</td><td class="no"><span class="x">✕</span>해석 필요</td><td class="yes"><span class="o">✓</span>직접 실행</td></tr>
+    <tr><td>검증 가능?</td><td class="no"><span class="x">✕</span>주관적 판단</td><td class="yes"><span class="o">✓</span>통과/실패 명확</td></tr>
+    <tr><td>상태 보존?</td><td class="no"><span class="x">✕</span>매번 재설명</td><td class="yes"><span class="o">✓</span>파일 / DB / git</td></tr>
+    <tr><td>재현 가능?</td><td class="no"><span class="x">✕</span>비결정적</td><td class="yes"><span class="o">✓</span>결정적</td></tr>
+    <tr><td>조합 가능?</td><td class="no"><span class="tri">△</span>길어지면 충돌</td><td class="yes"><span class="o">✓</span>모듈화</td></tr>
+  </table>
+  <p class="lead a" style="margin-top:24px; font-size:18px;">그럼 자연어는? — <b style="color:var(--purple);">적응 층</b>(전략·휴리스틱)에서 일한다 → 다음 섹션</p>
+</div>
+
+<!-- 슬라이드 9: 코드가 하네스가 되는 구체적 형태 -->
+<div class="slide"
+     data-notes="[~1분 30초] 추상적인 세 속성이 실제로 어떤 모습인지 보겠습니다. 훅은 코드로 작성된 규칙의 자동 집행입니다 — 커밋 전에, 파일 수정 후에 반드시 실행되죠. 린터와 타입체커는 에이전트의 출력을 코드가 검증하는 장치입니다. 테스트는 '완료'의 정의 자체를 코드로 박아두는 것이고요. 그리고 파일시스템과 Git, 메모리 파일이 작업 상태를 영속화합니다. 아까 Böckeler의 '센서'가 전부 코드였던 이유가 바로 이것입니다 — 검증 가능한 피드백은 코드만 만들 수 있습니다.">
+  <div class="kicker a">03 · THESIS — 왜 코드인가?</div>
+  <h2 class="a">코드가 하네스가 되는 <span class="hl">구체적 형태</span></h2>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+    <div class="card a">
+      <h3>🪝 훅 <span style="font-family:var(--mono); font-size:13px; color:var(--dim);">pre-commit · post-edit</span></h3>
+      <p>코드로 작성된 규칙의 자동 집행</p>
+      <span class="tag">EXECUTABLE</span>
+    </div>
+    <div class="card a">
+      <h3>🔍 린터 / 타입체커</h3>
+      <p>코드가 에이전트 출력을 검증</p>
+      <span class="tag">VERIFIABLE</span>
+    </div>
+    <div class="card a">
+      <h3>🧪 테스트</h3>
+      <p>코드가 "완료 조건"을 정의</p>
+      <span class="tag">EXECUTABLE + VERIFIABLE</span>
+    </div>
+    <div class="card a">
+      <h3>📂 파일시스템 / Git / 메모리 파일</h3>
+      <p>작업 진행 상태가 코드·파일로 영속화</p>
+      <span class="tag">STATEFUL</span>
+    </div>
+  </div>
+  <p class="lead a" style="margin-top:22px; font-size:17px;">→ Böckeler의 "센서"가 전부 코드인 이유</p>
+</div>
+
+<!-- ════════ 섹션 4: 증거 — SkillOpt ════════ -->
+
+<!-- 슬라이드 10: SkillOpt 소개 -->
+<div class="slide"
+     data-notes="[~1분 30초] 증거로 넘어갑니다. 먼저 용어 정리 — 여기서 말하는 '스킬'은 에이전트가 읽는 자연어 지침 문서입니다. AGENTS.md나 SKILL.md처럼, 전략·노하우·도메인 지식을 마크다운으로 적어둔 것이죠. SkillOpt를 한 줄로 요약하면 '모델 가중치는 그대로 두고, 이 스킬 문서를 딥러닝처럼 최적화한다'입니다. 두 접근의 차이가 큽니다. 파인튜닝은 모델 가중치를 갱신하니 GPU 비용이 크고, 모델마다 다시 학습해야 하고, 기존 능력이 망가지는 catastrophic forgetting 위험이 있고, 가중치를 못 여는 폐쇄형 모델에는 아예 적용이 안 됩니다. 스킬 최적화는 모델 바깥의 텍스트만 고치니 저렴하고, 모델을 갈아타도 그대로 재사용되고, 가중치를 건드리지 않아 안전하고, 폐쇄형 모델에도 적용됩니다. 굳이 비유하면, 직원을 재교육하는 게 아니라 더 나은 업무 매뉴얼을 만드는 쪽입니다.">
+  <div class="kicker a">04 · 증거 — SkillOpt</div>
+  <h2 class="a">가중치 대신 <span class="hl-g">스킬 문서</span>를 학습시킨다</h2>
+  <p class="lead a" style="margin-bottom:16px; font-size:17px;"><b style="color:var(--text);">스킬</b> = 에이전트가 읽는 자연어 지침 문서(Markdown) — <code style="font-family:var(--mono); color:var(--blue); font-size:15px;">AGENTS.md</code> · <code style="font-family:var(--mono); color:var(--blue); font-size:15px;">SKILL.md</code>처럼 전략·노하우·도메인 지식을 담는다</p>
+  <div class="cards">
+    <div class="card a" style="opacity:0.8;">
+      <div class="icon">🧠</div>
+      <h3>모델 파인튜닝 <span style="font-family:var(--mono); font-size:13px; color:var(--dim);">가중치를 갱신</span></h3>
+      <p>GPU 비용 큼 · 모델마다 재학습<br>catastrophic forgetting 위험 · 폐쇄형 모델 불가</p>
+    </div>
+    <div class="card a" style="border-color:rgba(102,187,106,0.5); background:rgba(102,187,106,0.05);">
+      <div class="icon">📝</div>
+      <h3 style="color:var(--green);">스킬 최적화 <span style="font-family:var(--mono); font-size:13px; color:var(--dim);">외부 텍스트를 갱신</span></h3>
+      <p>저렴 · 모델 갈아타도 재사용<br>가중치 불변(안전) · 폐쇄형 모델도 적용</p>
+    </div>
+  </div>
+  <p class="footnote a">비유하면 "모델 재교육"이 아니라 "더 나은 업무 매뉴얼 작성" — 같은 모델도 매뉴얼이 좋으면 성과가 달라진다</p>
+  <div class="src">Yang et al., "SkillOpt", Microsoft Research, arXiv:2605.23904 (2026)</div>
+</div>
+
+<!-- 슬라이드 11: SkillOpt 최적화 루프 -->
+<div class="slide"
+     data-notes="[~2분] 작동 방식입니다. AI 팀이시니 이 비유가 제일 빠를 겁니다 — 신경망 학습과 똑같은 구조입니다. forward pass, backward pass, update, validate. ① 에이전트가 스킬 문서를 들고 과제를 수행하고(롤아웃 = forward), ② 결과를 채점하고(= loss), ③ 별도의 옵티마이저 모델이 스킬 문서에 제한된 수정을 제안하고(= gradient update), ④ 검증셋 점수가 실제로 오를 때만 수정을 받아들입니다(= validation). 이걸 에포크 단위로 반복합니다. 학습률이나 검증셋 같은 과적합 방지 장치도 텍스트 공간에 그대로 옮겨놨습니다 — 자세한 건 각주로만 두겠습니다.">
+  <div class="kicker a">04 · 증거 — SkillOpt</div>
+  <h2 class="a">최적화 루프: <span class="hl-p">딥러닝과 같은 구조</span></h2>
+  <div class="figure a">
+    <svg viewBox="0 0 1100 300" width="1040" xmlns="http://www.w3.org/2000/svg">
+      <!-- 4 단계 박스 -->
+      <rect x="30" y="80" width="230" height="92" rx="13" fill="rgba(79,195,247,0.07)" stroke="#4fc3f7" stroke-width="2"/>
+      <text x="145" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">① 에이전트 실행</text>
+      <text x="145" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Rollout = forward</text>
+      <rect x="300" y="80" width="230" height="92" rx="13" fill="rgba(79,195,247,0.07)" stroke="#4fc3f7" stroke-width="2"/>
+      <text x="415" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">② 결과 채점</text>
+      <text x="415" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Scoring = loss</text>
+      <rect x="570" y="80" width="230" height="92" rx="13" fill="rgba(124,77,255,0.08)" stroke="#7c4dff" stroke-width="2"/>
+      <text x="685" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">③ 스킬 수정 제안</text>
+      <text x="685" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Bounded Edit = update</text>
+      <rect x="840" y="80" width="230" height="92" rx="13" fill="rgba(102,187,106,0.08)" stroke="#66bb6a" stroke-width="2"/>
+      <text x="955" y="118" text-anchor="middle" fill="#e0e0e0" font-size="17" font-weight="700">④ 검증 통과 시 적용</text>
+      <text x="955" y="146" text-anchor="middle" fill="#7a82a8" font-size="13" class="mono-t">Validation Gate</text>
+      <!-- 화살표 -->
+      <line x1="260" y1="126" x2="293" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="300,126 288,120 288,132" fill="#b0b0b0"/>
+      <line x1="530" y1="126" x2="563" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="570,126 558,120 558,132" fill="#b0b0b0"/>
+      <line x1="800" y1="126" x2="833" y2="126" stroke="#b0b0b0" stroke-width="2.5"/><polygon points="840,126 828,120 828,132" fill="#b0b0b0"/>
+      <!-- 루프백 -->
+      <path d="M 955 172 L 955 232 L 145 232 L 145 178" fill="none" stroke="#7c4dff" stroke-width="2.5" stroke-dasharray="7 5"/>
+      <polygon points="145,172 138,186 152,186" fill="#7c4dff"/>
+      <text x="550" y="256" text-anchor="middle" fill="#7c4dff" font-size="15" font-weight="700" class="mono-t">반복 (Epoch)</text>
+    </svg>
+  </div>
+  <p class="lead a" style="font-size:17px; margin-top:2px;">forward → backward → update → validate. <b style="color:var(--text);">모델 가중치 대신 텍스트를 학습</b></p>
+  <p class="footnote a">안정 장치: Textual Learning Rate (파괴적 수정 방지) · Rejected-Edit Buffer (실패한 수정 기억) · Held-out Validation (과적합 방지)</p>
+</div>
+
+<!-- 슬라이드 12: SkillOpt 결과 -->
+<div class="slide"
+     data-notes="[~2분] 결과입니다. 막대 보는 법부터 — 연한 칸은 스킬을 적용하기 전 베이스라인 성능이고, 진한 칸은 SkillOpt가 더해준 향상분입니다. 둘을 합친 막대 끝이 최종 성능이고요. GPT-5.5 기준, 세 환경에 공통으로 있는 5개 벤치마크 평균입니다. 여기서 자주 나오는 오해를 먼저 풀겠습니다 — Claude Code의 향상폭(+19.1)이 제일 작죠? 이게 'Claude Code 하네스가 성능이 낮다'는 뜻이 절대 아닙니다. 오히려 반대입니다. Claude Code는 스킬 적용 전 베이스라인이 57.8로 셋 중 가장 높습니다. 출발점이 높으니 올라갈 여지가 작아서 향상폭이 작게 나온 것뿐이고, 최종 성능은 76.9에서 79.6 사이로 세 환경이 대등합니다. 즉 향상폭의 크기는 '실력 차이'가 아니라 '남은 여유 공간'의 차이입니다. 진짜 핵심 메시지는 두 가지입니다. 첫째, 스킬 최적화는 환경을 안 가린다 — 평가한 모든 조합에서 1위 또는 공동 1위였습니다. 직접 채팅은 모델 7종에 과제 6종이라 42개, Codex와 Claude Code 하네스는 GPT-5.5에 과제 5종씩이라 각 5개, 합치면 52개 조합 전부죠. Human이 손으로 쓴 스킬이나 GEPA·TextGrad 같은 기존 자동 최적화 기법도 모두 앞섰습니다. 둘째, 결과물이 모델이 아니라 마크다운 문서 하나라는 것 — 300에서 2,000토큰짜리 best_skill.md가 전부고, 배포할 때 추가 추론 비용은 0입니다.">
+  <div class="kicker a">04 · 증거 — SkillOpt</div>
+  <h2 class="a">결과: <span class="hl">어떤 환경에서도 최고</span> · 최종 성능은 <span class="hl-g">대등</span></h2>
+  <div class="bars a" style="gap:14px;">
+    <div class="bar-row">
+      <div class="label">Direct chat <small>하네스 없음</small></div>
+      <div class="bar-track" style="display:flex;">
+        <div style="width:53.8%; background:rgba(255,255,255,0.16);"></div>
+        <div style="width:25.8%; background:linear-gradient(90deg, #36506b, #4fc3f7); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-family:var(--mono); font-size:11.5px; color:#d6f0ff;">+25.8</div>
+      </div>
+      <div class="val" style="color:var(--blue);">79.6</div>
+    </div>
+    <div class="bar-row">
+      <div class="label">Codex <small>코드 하네스</small></div>
+      <div class="bar-track" style="display:flex;">
+        <div style="width:54.0%; background:rgba(255,255,255,0.16);"></div>
+        <div style="width:24.8%; background:linear-gradient(90deg, #4a3a8c, #7c4dff); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-family:var(--mono); font-size:11.5px; color:#e6dcff;">+24.8</div>
+      </div>
+      <div class="val" style="color:var(--purple);">78.8</div>
+    </div>
+    <div class="bar-row">
+      <div class="label">Claude Code <small>코드 하네스</small></div>
+      <div class="bar-track" style="display:flex;">
+        <div style="width:57.8%; background:rgba(255,255,255,0.22);"></div>
+        <div style="width:19.1%; background:linear-gradient(90deg, #3d6b40, #66bb6a); display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-family:var(--mono); font-size:11.5px; color:#d8f5da;">+19.1</div>
+      </div>
+      <div class="val" style="color:var(--green);">76.9</div>
+    </div>
+  </div>
+  <p class="footnote a"><span style="display:inline-block; width:11px; height:11px; background:rgba(255,255,255,0.22); border-radius:2px; vertical-align:middle;"></span> 스킬 전 베이스라인 &nbsp;·&nbsp; <span style="display:inline-block; width:11px; height:11px; background:#4fc3f7; border-radius:2px; vertical-align:middle;"></span> SkillOpt 향상분 &nbsp;|&nbsp; GPT-5.5, 공통 5개 벤치마크 평균. <b style="color:var(--muted);">Claude Code는 향상폭이 작은 게 아니라 베이스라인(57.8)이 가장 높을 뿐 — 최종은 셋 다 대등</b></p>
+  <div class="stat-chips a">
+    <div class="chip"><b>전 조합 1위</b><span>평가한 모든 모델·과제·실행환경 조합에서 1위·공동 1위</span></div>
+    <div class="chip"><b>best_skill.md</b><span>결과물은 문서 1개 (300–2,000 토큰)</span></div>
+    <div class="chip"><b>+0</b><span>배포 시 추가 추론 비용</span></div>
+  </div>
+</div>
+
+<!-- 슬라이드 13: 3계층 통찰 -->
+<div class="slide"
+     data-notes="[~30초~1분] SkillOpt가 주는 핵심 통찰을 한 장으로 정리하면 이 3계층 구조입니다. 맨 아래, 모델은 얼려둡니다 — 건드리지 않아요. 중간의 코드 하네스는 인프라입니다 — 실행하고 검증하고 상태를 유지하는, 스킬이 실제로 '동작'하게 만드는 기반이죠. 맨 위의 자연어 스킬이 적응 층입니다 — 전략, 휴리스틱, 도메인 지식을 담고, SkillOpt가 최적화하는 게 바로 이 층입니다. 아까 슬라이드 8에서 '자연어는 다른 층에서 일한다'고 했던 게 이 그림입니다. 세 층의 분리 — 이게 오늘 발표에서 하나만 기억하셔야 한다면 가져가실 그림입니다.">
+  <div class="kicker a">04 · 증거 — SkillOpt</div>
+  <h2 class="a">핵심 통찰: <span class="hl">세 계층의 분리</span></h2>
+  <div class="figure a">
+    <svg viewBox="0 0 1100 330" width="1010" xmlns="http://www.w3.org/2000/svg">
+      <!-- Layer 1: NL skills -->
+      <rect x="150" y="20" width="640" height="86" rx="13" fill="rgba(124,77,255,0.1)" stroke="#7c4dff" stroke-width="2"/>
+      <text x="470" y="56" text-anchor="middle" fill="#e0e0e0" font-size="19" font-weight="800">자연어 스킬</text>
+      <text x="470" y="84" text-anchor="middle" fill="#b0b0b0" font-size="14.5">전략 · 휴리스틱 · 도메인 지식 (AGENTS.md · SKILL.md)</text>
+      <text x="820" y="58" fill="#7c4dff" font-size="15" font-weight="700">← 적응 층: SkillOpt가 최적화</text>
+      <!-- Layer 2: code harness -->
+      <rect x="150" y="120" width="640" height="86" rx="13" fill="rgba(79,195,247,0.08)" stroke="#4fc3f7" stroke-width="2"/>
+      <text x="470" y="156" text-anchor="middle" fill="#e0e0e0" font-size="19" font-weight="800">코드 하네스 — 실행 · 검증 · 상태</text>
+      <text x="470" y="184" text-anchor="middle" fill="#b0b0b0" font-size="14.5">훅 · 도구 · 샌드박스 · 피드백 루프</text>
+      <text x="820" y="158" fill="#4fc3f7" font-size="15" font-weight="700">← 인프라 층: 스킬이 "동작"하는 기반</text>
+      <!-- Layer 3: model -->
+      <rect x="150" y="220" width="640" height="86" rx="13" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>
+      <text x="470" y="256" text-anchor="middle" fill="#e0e0e0" font-size="19" font-weight="800">모델 — 추론 엔진</text>
+      <text x="470" y="284" text-anchor="middle" fill="#b0b0b0" font-size="14.5">GPT-5.5 · Claude · Qwen ...</text>
+      <text x="820" y="258" fill="#b0b0b0" font-size="15" font-weight="700">← Frozen: 건드리지 않음</text>
+    </svg>
+  </div>
+  <p class="lead a" style="text-align:center; font-size:18px;">모델은 고정 · 코드 하네스는 인프라 · 자연어 스킬은 적응 계층</p>
+</div>
+
+<!-- ════════ 섹션 5: 사례 — oh-my-openagent ════════ -->
+
+<!-- 슬라이드 14: oh-my-openagent 소개 -->
+<div class="slide"
+     data-notes="[~1분 30초] 제가 즐겨 쓰는 오픈소스 oh-my-openagent입니다. OpenCode 위에 하네스 레이어를 통째로 얹은 도구라 'oh-my-opencode'로도 불려요(데모의 그 터미널). 별 개수보다 안에 뭐가 들었는지가 중요합니다. 왼쪽이 전문 에이전트들인데, 그냥 하나의 봇이 아니라 역할이 나뉘어 있습니다 — Prometheus가 계획을 세우고, Sisyphus가 오케스트레이터로 위임하며 완료까지 끌고 가고, Hephaestus가 코드베이스를 파고들어 끝까지 구현하고, Oracle은 아키텍처·디버깅 판단, Librarian은 문서·코드 검색, Explore는 빠른 탐색을 맡습니다. 오른쪽 위는 빌트인 MCP 다섯 개 — Exa로 웹 검색, Context7로 공식 문서, Grep.app으로 깃허브 코드 검색, ast-grep으로 25개 언어 구조 기반 검색, LSP로 정의 이동·참조 찾기·진단 같은 IDE 정밀 도구. 오른쪽 아래는 라이프사이클 훅 54개 이상인데, 파일을 고치거나 커밋할 때마다 자동으로 발동해서 진단·빌드·테스트 같은 코드 품질 게이트를 돌립니다. 별 개수는 6만 2천인데, 핵심은 이 구성요소들이 앞에서 배운 가이드·센서·오케스트레이션을 그대로 구현한다는 점입니다.">
+  <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
+  <h2 class="a"><span style="font-family:var(--mono);">oh-my-openagent</span> 안에 무엇이 들어있나</h2>
+  <div style="display:grid; grid-template-columns:1.05fr 1fr; gap:18px; margin-top:4px;">
+    <div class="card a" style="padding:20px 22px;">
+      <h3 style="font-size:16px; margin-bottom:12px; color:var(--blue);">전문 에이전트 11종 — 역할 분담</h3>
+      <div style="font-size:14px; line-height:1.95; color:var(--muted);">
+        <div><b style="color:var(--text);">Prometheus</b> — 계획: 인터뷰로 검증된 작업 계획 수립</div>
+        <div><b style="color:var(--text);">Sisyphus</b> — 오케스트레이터: 위임하고 완료까지 추진</div>
+        <div><b style="color:var(--text);">Hephaestus</b> — 심층 실행: 탐색부터 구현까지 자율</div>
+        <div><b style="color:var(--text);">Oracle</b> — 아키텍처·디버깅 판단</div>
+        <div><b style="color:var(--text);">Librarian</b> — 문서·코드 검색</div>
+        <div><b style="color:var(--text);">Explore</b> — 빠른 코드 탐색(grep)</div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div class="card a" style="padding:18px 22px;">
+        <h3 style="font-size:16px; margin-bottom:10px; color:var(--green);">빌트인 MCP 5종 — 도구</h3>
+        <div style="font-size:14px; line-height:1.85; color:var(--muted);">
+          <div><b style="color:var(--text);">Exa</b> 웹 검색 &nbsp;·&nbsp; <b style="color:var(--text);">Context7</b> 공식 문서</div>
+          <div><b style="color:var(--text);">Grep.app</b> GitHub 코드 검색</div>
+          <div><b style="color:var(--text);">ast-grep</b> 구조 기반 코드 검색 (25개 언어)</div>
+          <div><b style="color:var(--text);">LSP</b> 정의 이동·참조 찾기·진단</div>
+        </div>
+      </div>
+      <div class="card a" style="padding:18px 22px;">
+        <h3 style="font-size:16px; margin-bottom:8px; color:var(--purple);">라이프사이클 훅 54+ — 자동 검증</h3>
+        <div style="font-size:14px; line-height:1.7; color:var(--muted);">파일 수정·커밋 등 이벤트마다 자동 발동 — 진단·빌드·테스트 같은 코드 품질 게이트</div>
+      </div>
+    </div>
+  </div>
+  <div class="src">github.com/code-yeongyu/oh-my-openagent · GitHub 62k★ (2026-06, 발표 직전 갱신)</div>
+</div>
+
+<!-- 슬라이드 15: 이론 → 실제 매핑 -->
+<div class="slide"
+     data-notes="[~1분 30초] 앞에서 본 개념들이 이름만 붙어서 그대로 들어있습니다. 가이드, 즉 사전 제어는 에이전트 프롬프트와 계층형 AGENTS.md로 구현됩니다 — /init-deep 명령으로 자동 생성까지 해줍니다. 센서, 즉 사후 교정은 LSP 진단·빌드·테스트 훅 54개 이상이고, 에이전트가 파일을 고칠 때마다 자동 발동합니다. 오케스트레이션은 11개 전문 에이전트의 분업이에요 — 계획하는 Prometheus, 실행을 지휘하는 Sisyphus, 아키텍처·디버깅을 보는 Oracle, 문서·코드 검색을 맡는 Librarian, 빠른 탐색의 Explore 등이 역할을 나눠 갖습니다. 상태는 파일시스템·Git·Todo 시스템으로 영속화되고요. 그리고 오른쪽 작은 화면이 Team Mode인데, 에이전트를 최대 8개까지 병렬로 띄워서 tmux로 한눈에 보여줍니다. 한 가지 더 — 4장에서 말한 '자연어 스킬'이 바로 여기 SKILL.md 스킬 시스템으로 실재합니다. 이론과 증거와 제품이 한곳에서 만나는 거죠. 새로운 개념이 하나도 없습니다.">
+  <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
+  <h2 class="a" style="margin-bottom:20px;">이론 → 실제: <span class="hl">앞서 본 개념 그대로</span></h2>
+  <div style="display:grid; grid-template-columns: 1.55fr 1fr; gap:26px; align-items:center;">
+    <div class="map-rows">
+      <div class="map-row a">
+        <div class="left neutral">가이드 <span style="color:var(--dim); font-family:var(--mono); font-size:12px; margin-left:6px;">FEEDFORWARD</span></div>
+        <div class="arrow">→</div>
+        <div class="right" style="font-size:15px;">프롬프트 + 계층형 <code>AGENTS.md</code></div>
+      </div>
+      <div class="map-row a">
+        <div class="left neutral">센서 <span style="color:var(--dim); font-family:var(--mono); font-size:12px; margin-left:6px;">FEEDBACK</span></div>
+        <div class="arrow">→</div>
+        <div class="right" style="font-size:15px;">LSP 진단 · 빌드 · 테스트 훅 (54+)</div>
+      </div>
+      <div class="map-row a">
+        <div class="left neutral">오케스트레이션</div>
+        <div class="arrow">→</div>
+        <div class="right" style="font-size:15px;">11종 에이전트 (Prometheus·Sisyphus·Oracle…)</div>
+      </div>
+      <div class="map-row a">
+        <div class="left neutral">상태 보존 <span style="color:var(--dim); font-family:var(--mono); font-size:12px; margin-left:6px;">STATEFUL</span></div>
+        <div class="arrow">→</div>
+        <div class="right" style="font-size:15px;">파일시스템 + Git + Todo 시스템</div>
+      </div>
+      <div class="map-row a">
+        <div class="left neutral">자연어 스킬 <span style="color:var(--dim); font-family:var(--mono); font-size:12px; margin-left:6px;">04장의 그 스킬</span></div>
+        <div class="arrow">→</div>
+        <div class="right" style="font-size:15px;"><code>SKILL.md</code> 스킬 시스템 (playwright·git-master…)</div>
+      </div>
+    </div>
+    <div class="a" style="text-align:center;">
+      <img src="assets/omo-opt.png" alt="oh-my-openagent Team Mode — 병렬 에이전트 tmux 화면"
+           style="width:100%; border-radius:10px; border:1px solid var(--card-border);">
+      <div style="font-family:var(--mono); font-size:12px; color:var(--dim); margin-top:8px;">실제 Team Mode — 병렬 에이전트 (tmux)</div>
+    </div>
+  </div>
+  <p class="lead a" style="margin-top:22px; font-size:16px;">새 개념 없음 — <b style="color:var(--text);">이론·증거·제품이 한곳에서 만난다</b></p>
+</div>
+
+<!-- 슬라이드 16: 서브에이전트 = 컨텍스트 방화벽 -->
+<div class="slide"
+     data-notes="[~1분 30초] omo가 왜 에이전트를 11개로 쪼개 두었는지, 그 핵심 이유가 이 그림입니다. HumanLayer가 '컨텍스트 방화벽'이라고 부르는 패턴이에요. 메인 에이전트가 '스키마 파일이 어디 있지?' 같은 탐색을 직접 하면 Grep·Read·Bash 호출과 그 결과가 전부 메인 컨텍스트에 쌓입니다. 수십 번 쌓이면 정작 중요한 맥락이 노이즈에 묻혀 성능이 떨어지죠. 그래서 그 탐색을 서브에이전트한테 통째로 맡깁니다. 서브에이전트는 자기만의 별도 컨텍스트 창에서 그 수십 번의 호출을 다 처리하고, 중간 노이즈는 방화벽이 막아 메인으로 넘기지 않습니다. 돌아오는 건 '파일은 여기 있습니다' 같은 깔끔한 결론 하나뿐이에요. 덕분에 메인 컨텍스트는 끝까지 깨끗하게 유지되고, 더 길고 복잡한 작업을 할 수 있고, 여러 서브에이전트를 병렬로 돌릴 수도 있습니다. 앞 슬라이드에서 본 omo의 Explore·Oracle·Librarian이 정확히 이 방화벽 역할입니다 — 탐색의 노이즈는 가두고 결론만 메인에 전달하는 거죠.">
+  <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
+  <h2 class="a">서브에이전트 = <span class="hl">컨텍스트 방화벽</span></h2>
+  <div style="display:grid; grid-template-columns:0.92fr 1fr; gap:34px; align-items:center;">
+    <div style="text-align:center;">
+      <img src="assets/context-firewall.png" alt="컨텍스트 방화벽 — 메인 컨텍스트와 서브에이전트 컨텍스트를 분리, 중간 노이즈(도구 호출)는 차단하고 깔끔한 결과만 메인으로 복귀"
+           style="width:100%; max-height:452px; object-fit:contain; border-radius:12px; border:1px solid var(--card-border);">
+    </div>
+    <div style="font-size:16.5px; line-height:1.5; color:var(--muted); display:flex; flex-direction:column; gap:14px;">
+      <div>① 메인은 "스키마 어디 있어?" 같은 <b style="color:var(--text);">탐색을 서브에이전트에 위임</b></div>
+      <div>② 서브에이전트는 <b style="color:var(--text);">자기 컨텍스트 창</b>에서 Grep·Read·Bash를 수십 번 실행</div>
+      <div>③ 중간 <b style="color:var(--red);">노이즈는 방화벽이 차단</b> — 깔끔한 결론만 메인으로 복귀</div>
+      <div>④ 메인 컨텍스트가 <b style="color:var(--text);">끝까지 깨끗</b> → 더 길고 복잡한 작업 + 병렬화</div>
+      <div style="margin-top:4px; padding-top:12px; border-top:1px solid var(--card-border); color:var(--green);">→ omo의 <b>Explore·Oracle·Librarian</b>이 바로 이 방화벽 역할</div>
+    </div>
+  </div>
+  <div class="src">그림: HumanLayer, "Skill Issue: Harness Engineering for Coding Agents" (humanlayer.dev)</div>
+</div>
+
+<!-- 슬라이드 17: 실제 동작 흐름 + 데모 -->
+<div class="slide"
+     data-notes="[~4분 = 도식 1분 + 영상 1분 25초 + 마무리 1분] 도식: 사용자는 'ulw' 한 단어만 입력 → 계획 분해 → Sisyphus 오케스트레이터가 서브에이전트를 부리며 실행 → 코드는 즉시 센서(진단·빌드·테스트) 통과 필수 → 실패 시 자동 수정 루프. 복잡한 작업이면 Prometheus가 먼저 계획서를 만들고, 오늘 데모처럼 작은 버그 수정은 Sisyphus가 바로 받습니다. [🎬 배지 클릭 → 영상 전환, 전체화면 권장] 상황 설정: 어제 동료가 우선순위 가중치를 리팩토링했고 오늘 아침 버그 제보가 들어옴. 영상 내레이션 — (0:00) 입력은 버그 제보 한 줄뿐, 파일 위치도 '테스트 돌려라'도 말 안 함 / (0:05) ulw가 규칙 주입: '증거 없이 믿지 마라, 실행·검증하라' = 가이드 / (0:13) 스스로 git log·show로 어제 커밋 추적 = Stateful / (0:30) 진단: 가중치는 high=3인데 비교자는 오름차순. 커밋 의도를 존중해 비교자를 내림차순으로 고치기로 결정, Todo 3개 등록 / (0:45) 한 줄 수정 diff = Executable / (1:00) 하이라이트: 시키지 않은 테스트 2개 통과 + 빌드 성공 = 센서/Verifiable / (1:15) 요약 보고, $0.22, 컨텍스트 17%. [배지 클릭 → 도식 복귀] 마무리: 1분 25초 안에 가이드·센서·Executable·Verifiable·Stateful 전부 등장. 사람은 제보 한 줄, 나머지는 코드 하네스 위에서 자율적으로.">
+  <div class="kicker a">05 · 사례 — OH-MY-OPENAGENT</div>
+  <h2 class="a" style="margin-bottom:14px;"><span style="font-family:var(--mono); color:var(--green);">ulw</span> 한 단어로 시동되는 파이프라인</h2>
+  <div class="figure a" id="flowFigure">
+    <svg viewBox="0 0 1100 410" width="980" xmlns="http://www.w3.org/2000/svg">
+      <!-- 입력 -->
+      <rect x="460" y="6" width="180" height="44" rx="22" fill="rgba(102,187,106,0.12)" stroke="#66bb6a" stroke-width="2"/>
+      <text x="550" y="34" text-anchor="middle" fill="#66bb6a" font-size="17" font-weight="800" class="mono-t">$ ulw</text>
+      <line x1="550" y1="50" x2="550" y2="72" stroke="#b0b0b0" stroke-width="2"/><polygon points="550,80 543,68 557,68" fill="#b0b0b0"/>
+      <!-- Prometheus -->
+      <rect x="350" y="82" width="400" height="52" rx="11" fill="rgba(124,77,255,0.1)" stroke="#7c4dff" stroke-width="2"/>
+      <text x="550" y="108" text-anchor="middle" fill="#e0e0e0" font-size="16" font-weight="700">Prometheus — 계획: 목표 분해, BUILD_PLAN.md</text>
+      <text x="550" y="126" text-anchor="middle" fill="#7a82a8" font-size="12" class="mono-t">PLANNER</text>
+      <line x1="550" y1="134" x2="550" y2="154" stroke="#b0b0b0" stroke-width="2"/><polygon points="550,162 543,150 557,150" fill="#b0b0b0"/>
+      <!-- Sisyphus container -->
+      <rect x="130" y="164" width="840" height="220" rx="15" fill="rgba(79,195,247,0.04)" stroke="#4fc3f7" stroke-width="2"/>
+      <text x="166" y="192" fill="#4fc3f7" font-size="15" font-weight="800">Sisyphus — 실행 오케스트레이터</text>
+      <!-- 서브에이전트 3개 -->
+      <rect x="166" y="208" width="150" height="46" rx="9" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)"/>
+      <text x="241" y="230" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="700">Explore</text>
+      <text x="241" y="246" text-anchor="middle" fill="#7a82a8" font-size="12">탐색</text>
+      <rect x="332" y="208" width="150" height="46" rx="9" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)"/>
+      <text x="407" y="230" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="700">Oracle</text>
+      <text x="407" y="246" text-anchor="middle" fill="#7a82a8" font-size="12">판단</text>
+      <rect x="498" y="208" width="150" height="46" rx="9" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)"/>
+      <text x="573" y="230" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="700">Librarian</text>
+      <text x="573" y="246" text-anchor="middle" fill="#7a82a8" font-size="12">참조</text>
+      <!-- 구현 -->
+      <line x1="407" y1="254" x2="407" y2="278" stroke="#b0b0b0" stroke-width="2"/><polygon points="407,286 400,274 414,274" fill="#b0b0b0"/>
+      <rect x="307" y="288" width="200" height="42" rx="9" fill="rgba(124,77,255,0.1)" stroke="#7c4dff" stroke-width="1.5"/>
+      <text x="407" y="314" text-anchor="middle" fill="#e0e0e0" font-size="15" font-weight="700">구현 (코드 작성)</text>
+      <!-- 센서 -->
+      <line x1="507" y1="309" x2="588" y2="309" stroke="#b0b0b0" stroke-width="2"/><polygon points="596,309 584,302 584,316" fill="#b0b0b0"/>
+      <rect x="598" y="288" width="240" height="42" rx="9" fill="rgba(102,187,106,0.08)" stroke="#66bb6a" stroke-width="1.5"/>
+      <text x="718" y="314" text-anchor="middle" fill="#e0e0e0" font-size="15" font-weight="700">센서: 진단·빌드·테스트</text>
+      <!-- pass / fail -->
+      <line x1="838" y1="309" x2="906" y2="309" stroke="#66bb6a" stroke-width="2"/><polygon points="914,309 902,302 902,316" fill="#66bb6a"/>
+      <text x="935" y="314" fill="#66bb6a" font-size="15" font-weight="800">✓ 완료</text>
+      <path d="M 718 330 L 718 358 L 407 358 L 407 336" fill="none" stroke="#ef5350" stroke-width="2" stroke-dasharray="6 5"/>
+      <polygon points="407,330 400,342 414,342" fill="#ef5350"/>
+      <text x="562" y="376" text-anchor="middle" fill="#ef5350" font-size="13.5" font-weight="700">✕ Fail → 자동 수정 루프</text>
+      <!-- Ralph loop -->
+      <text x="550" y="404" text-anchor="middle" fill="#7a82a8" font-size="13.5" class="mono-t">↻ 모든 태스크 완료까지 반복 (Ralph Loop)</text>
+    </svg>
+  </div>
+  <div id="demoWrap" style="display:none; justify-content:center; align-items:center;">
+    <video id="demoVideo" src="demo.mp4" controls preload="metadata"
+           style="width:1050px; max-height:540px; border-radius:12px; border:1px solid var(--card-border); background:#000;"></video>
+  </div>
+  <div class="demo-badge a" id="demoToggle" style="cursor:pointer;">🎬 데모 재생 (1분 25초) — ulw 실행 장면</div>
+</div>
+
+<!-- ════════ 섹션 6: 마무리 ════════ -->
+
+<!-- 슬라이드 18: 시사점 -->
+<div class="slide"
+     data-notes="[~1분 30초] 정리하겠습니다. 세 가지만 가져가시면 됩니다. 첫째, '더 좋은 모델'만이 답이 아닙니다 — 같은 모델로 하네스만 바꿔서 Terminal Bench 순위가 Top 30에서 Top 5로 올라간 사례가 있습니다. 둘째, 코드가 최적의 하네스 매체입니다 — 실행 가능하고, 검증 가능하고, 상태를 보존하니까요. 셋째, 하네스는 이제 감으로 만드는 게 아니라 SkillOpt처럼 체계적으로 최적화하는 대상이 됐습니다. 마지막으로 이 인용을 남깁니다 — '하네스는 줄어들지 않고, 이동한다.' 모델이 좋아져도 하네스가 사라지는 게 아니라, 새로운 천장에 맞는 새로운 하네스가 필요해집니다. 감사합니다.">
+  <div class="kicker a">06 · 마무리</div>
+  <h2 class="a">시사점 <span class="hl">3가지</span></h2>
+  <div class="cards a" style="margin-bottom:30px;">
+    <div class="card">
+      <div style="font-family:var(--mono); font-size:26px; color:var(--blue); margin-bottom:10px;">1</div>
+      <h3>"더 좋은 모델"만이 답이 아니다</h3>
+      <p>동일 모델, 하네스만 교체 → Terminal Bench Top 30 → Top 5</p>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono); font-size:26px; color:var(--purple); margin-bottom:10px;">2</div>
+      <h3>코드가 최적의 하네스 매체다</h3>
+      <p>Executable · Verifiable · Stateful</p>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono); font-size:26px; color:var(--green); margin-bottom:10px;">3</div>
+      <h3>하네스는 최적화 가능한 대상이다</h3>
+      <p>SkillOpt: 체계적 텍스트-공간 최적화</p>
+    </div>
+  </div>
+  <div class="quote a" style="font-size:20px;">
+    "하네스는 줄어들지 않고, 이동한다. 모델이 새 천장을 열면, 새로운 하네스가 필요해진다."
+    <span class="who">— Addy Osmani</span>
+  </div>
+</div>
+
+<!-- 슬라이드 19: 참고 자료 -->
+<div class="slide"
+     data-notes="[Q&A 대기] 참고 자료입니다. 질문 받겠습니다. [예상 질문 대비] ① 프롬프트 엔지니어링과의 차이 → 프롬프트는 하네스의 한 구성요소일 뿐, 하네스는 실행 환경+도구+검증 루프 전체. ② 자연어 스킬이면 코드 아니지 않냐 → 층이 다르다, 코드는 인프라 층, 자연어 스킬은 적응 층. ③ Claude Code 향상폭이 더 작은데? → 향상폭은 '실력차'가 아니라 '여유 공간'. Claude Code는 베이스라인이 57.8로 셋 중 최고라 올라갈 여지가 작을 뿐, 최종은 76.9~79.6으로 세 환경이 대등 (논문 표, GPT-5.5 공통 5개 벤치마크). ④ 모델 좋아지면 하네스 불필요? → 하네스는 줄지 않고 이동한다. ⑤ 당장 적용할 것 → AGENTS.md 60줄 이하 작성, 린터/타입체커를 에이전트 피드백으로 연결, 스킬 분리와 점진적 공개.">
+  <div class="kicker a">REFERENCES</div>
+  <h2 class="a">참고 자료</h2>
+  <div class="refs">
+    <div class="a">
+      <h3>논문</h3>
+      <li>Ning et al., "Code as Agent Harness" <span class="u">arXiv:2605.18747 (2026)</span></li>
+      <li>Yang et al., "SkillOpt" <span class="u">arXiv:2605.23904 · github.com/microsoft/SkillOpt (2026)</span></li>
+    </div>
+    <div class="a">
+      <h3>블로그</h3>
+      <li>LangChain, "The Anatomy of an Agent Harness" <span class="u">(2026.03)</span></li>
+      <li>Addy Osmani, "Agent Harness Engineering" <span class="u">(2026.04)</span></li>
+      <li>Böckeler, "Harness engineering for coding agent users" <span class="u">martinfowler.com (2026.04)</span></li>
+      <li>HumanLayer, "Skill Issue: Harness Engineering for Coding Agents" <span class="u">(2026.03)</span></li>
+    </div>
+    <div class="a">
+      <h3>도구</h3>
+      <li>oh-my-openagent <span class="u">omo.dev · github.com/code-yeongyu/oh-my-openagent</span></li>
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<script>
+// ── 16:9 덱 스케일링 (PPT처럼 letterbox) ──
+const deck = document.getElementById('deck');
+function fitDeck() {
+  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+  deck.style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+window.addEventListener('resize', fitDeck);
+fitDeck();
+
+// Slide navigation
+const slides = [...document.querySelectorAll('.slide')];
+let current = 0;
+
+function goTo(index) {
+  if (index < 0 || index >= slides.length) return;
+  slides[current].classList.remove('active');
+  slides[index].classList.add('active');
+  current = index;
+  document.querySelector('.hint').classList.add('hidden');
+  const v = document.getElementById('demoVideo');
+  if (v && !v.paused) v.pause();
+  updateProgress();
+  updateCounter();
+  updateNotes();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (document.activeElement && document.activeElement.tagName === 'VIDEO') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); }
+  if (e.key.toLowerCase() === 'f') toggleFullscreen();
+  if (e.key.toLowerCase() === 's') toggleNotes();
+});
+
+// 클릭으로 넘김 (좌측 1/4 클릭 = 이전, 나머지 = 다음)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('a, video, .demo-badge')) return;
+  if (e.clientX < window.innerWidth * 0.25) goTo(current - 1);
+  else goTo(current + 1);
+});
+
+// 데모 영상 토글 (슬라이드 17: 다이어그램 ↔ 영상)
+const demoToggle = document.getElementById('demoToggle');
+demoToggle.addEventListener('click', () => {
+  const wrap = document.getElementById('demoWrap');
+  const fig = document.getElementById('flowFigure');
+  const v = document.getElementById('demoVideo');
+  if (wrap.style.display === 'none') {
+    wrap.style.display = 'flex';
+    fig.style.display = 'none';
+    demoToggle.textContent = '↩ 다이어그램으로 돌아가기';
+    v.play();
+  } else {
+    v.pause();
+    wrap.style.display = 'none';
+    fig.style.display = 'flex';
+    demoToggle.textContent = '🎬 데모 재생 (1분 25초) — ulw 실행 장면';
+  }
+});
+
+// Touch/swipe
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => {
+  const diff = touchStartX - e.changedTouches[0].clientX;
+  if (Math.abs(diff) > 50) diff > 0 ? goTo(current + 1) : goTo(current - 1);
+});
+
+function updateProgress() {
+  document.getElementById('progress').style.width =
+    (current / (slides.length - 1) * 100) + '%';
+}
+
+function updateCounter() {
+  document.getElementById('counter').textContent =
+    (current + 1) + ' / ' + slides.length;
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+let notesWindow = null;
+
+function toggleNotes() {
+  if (notesWindow && !notesWindow.closed) {
+    notesWindow.close();
+    notesWindow = null;
+    return;
+  }
+  notesWindow = window.open('', 'SpeakerNotes', 'width=520,height=420,top=80,left=80');
+  notesWindow.document.write(`<!DOCTYPE html>
+<html><head><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+         background: #1a1a1a; color: #e0e0e0; padding: 24px; }
+  .slide-num { font-size: 12px; color: #888; margin-bottom: 12px; font-family: monospace; }
+  .label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+           color: #666; margin-bottom: 8px; }
+  .notes { font-size: 16px; line-height: 1.8; color: #ccc; }
+</style></head><body>
+  <div class="slide-num" id="sn"></div>
+  <div class="label">Speaker Notes</div>
+  <div class="notes" id="nt"></div>
+</body></html>`);
+  notesWindow.document.close();
+  updateNotes();
+}
+
+function updateNotes() {
+  if (!notesWindow || notesWindow.closed) return;
+  try {
+    const note = slides[current].dataset.notes || '(No notes)';
+    notesWindow.document.getElementById('nt').textContent = note;
+    notesWindow.document.getElementById('sn').textContent =
+      'Slide ' + (current + 1) + ' / ' + slides.length;
+  } catch(e) {}
+}
+
+updateProgress();
+updateCounter();
+</script>
+</body>
+</html>
