@@ -516,9 +516,9 @@
 
 <!-- 슬라이드 13: SkillOpt 결과 -->
 <div class="slide"
-     data-notes="[~2분] 결과입니다. 막대 보는 법부터 — 연한 칸은 스킬을 적용하기 전 베이스라인 성능이고, 진한 칸은 SkillOpt가 더해준 향상분입니다. 둘을 합친 막대 끝이 최종 성능이고요. GPT-5.5 기준, 세 환경에 공통으로 있는 5개 벤치마크 평균입니다. 여기서 자주 나오는 오해를 먼저 풀겠습니다 — Claude Code의 향상폭(+19.1)이 제일 작죠? 이게 'Claude Code 하네스가 성능이 낮다'는 뜻이 절대 아닙니다. 오히려 반대입니다. Claude Code는 스킬 적용 전 베이스라인이 57.8로 셋 중 가장 높습니다. 출발점이 높으니 올라갈 여지가 작아서 향상폭이 작게 나온 것뿐이고, 최종 성능은 76.9에서 79.6 사이로 세 환경이 대등합니다. 즉 향상폭의 크기는 '실력 차이'가 아니라 '남은 여유 공간'의 차이입니다. 진짜 핵심 메시지는 두 가지입니다. 첫째, 스킬 최적화는 환경을 안 가린다 — 평가한 모든 조합에서 1위 또는 공동 1위였습니다. 직접 채팅은 모델 7종에 과제 6종이라 42개, Codex와 Claude Code 하네스는 GPT-5.5에 과제 5종씩이라 각 5개, 합치면 52개 조합 전부죠. Human이 손으로 쓴 스킬이나 GEPA·TextGrad 같은 기존 자동 최적화 기법도 모두 앞섰습니다. 둘째, 결과물이 모델이 아니라 마크다운 문서 하나라는 것 — 300에서 2,000토큰짜리 best_skill.md가 전부고, 배포할 때 추가 추론 비용은 0입니다.">
+     data-notes="[~2분] 결과입니다. 막대 보는 법부터 — 연한 칸은 스킬을 적용하기 전 베이스라인 성능이고, 진한 칸은 SkillOpt가 더해준 향상분입니다. 둘을 합친 막대 끝이 최종 성능이고요. GPT-5.5 기준, 세 환경에 공통으로 있는 5개 벤치마크 평균입니다. 여기서 자주 나오는 오해를 먼저 풀겠습니다 — Claude Code의 향상폭(+19.1)이 제일 작죠? 이게 'Claude Code 하네스가 성능이 낮다'는 뜻이 절대 아닙니다. 오히려 반대입니다. Claude Code는 스킬 적용 전 베이스라인이 57.8로 셋 중 가장 높습니다. 출발점이 높으니 올라갈 여지가 작아서 향상폭이 작게 나온 것뿐이고, 최종 성능은 76.9에서 79.6 사이로 세 환경이 대등합니다. 즉 향상폭의 크기는 '실력 차이'가 아니라 '남은 여유 공간'의 차이입니다. 제목 그대로 — SkillOpt는 실행환경을 가리지 않고 향상시킵니다. Direct chat, Codex, Claude Code 셋 다 +19에서 +26씩 올랐죠. 이제 아래 세 칩으로 핵심을 정리합니다. 첫째, 기존 기법을 전부 앞섰다 — 사람이 손으로 쓴 스킬이든 기존 자동 최적화 기법이든 모두 위였고, 과제별로 제일 잘한 것만 추려 모은 가상의 상한선보다도 평균 +5.4점 높았습니다. 둘째, 향상폭이 크고 특히 형식·절차가 엄격한 과제일수록 큽니다 — 예로 스프레드시트 과제가 41.8에서 80.7로 올랐죠. 셋째, 결과물이 모델이 아니라 마크다운 문서 하나라는 것 — 300에서 2,000토큰짜리 best_skill.md가 전부고, 배포할 때 추가 추론 비용은 0입니다.">
   <div class="kicker a">04 · 증거 — SkillOpt</div>
-  <h2 class="a">결과: <span class="hl">어떤 환경에서도 최고</span> · 최종 성능은 <span class="hl-g">대등</span></h2>
+  <h2 class="a">결과: <span class="hl">실행환경을 가리지 않고</span> <span class="hl-g">향상</span></h2>
   <div class="bars a" style="gap:14px;">
     <div class="bar-row">
       <div class="label">Direct chat <small>하네스 없음</small></div>
@@ -547,9 +547,9 @@
   </div>
   <p class="footnote a"><span style="display:inline-block; width:11px; height:11px; background:rgba(255,255,255,0.22); border-radius:2px; vertical-align:middle;"></span> 스킬 전 베이스라인 &nbsp;·&nbsp; <span style="display:inline-block; width:11px; height:11px; background:#4fc3f7; border-radius:2px; vertical-align:middle;"></span> SkillOpt 향상분 &nbsp;|&nbsp; GPT-5.5, 공통 5개 벤치마크 평균. <b style="color:var(--muted);">Claude Code는 향상폭이 작은 게 아니라 베이스라인(57.8)이 가장 높을 뿐 — 최종은 셋 다 대등</b></p>
   <div class="stat-chips a">
-    <div class="chip"><b>전 조합 1위</b><span>평가한 모든 모델·과제·실행환경 조합에서 1위·공동 1위</span></div>
-    <div class="chip"><b>best_skill.md</b><span>결과물은 문서 1개 (300–2,000 토큰)</span></div>
-    <div class="chip"><b>+0</b><span>배포 시 추가 추론 비용</span></div>
+    <div class="chip"><b>기존 기법 전부 상회</b><span>사람이 쓴 스킬·기존 자동 최적화 모두 위 · 과제별 최고만 추린 가상 상한선보다도 +5.4점</span></div>
+    <div class="chip"><b>절차적 과제 최대 +38.9</b><span>형식·절차가 엄격할수록 향상 큼 (예: 스프레드시트 41.8 → 80.7)</span></div>
+    <div class="chip"><b>결과물은 문서 1개</b><span>best_skill.md (300–2,000 토큰) · 배포 시 추가 추론 비용 +0</span></div>
   </div>
 </div>
 
